@@ -156,14 +156,18 @@ class ProductoCard extends StatelessWidget {
                   ),
                   Row(
                     children: [
-                      Text(
-                        'S/ ${_formatearPrecio(producto['precio'])}',
-                        style: const TextStyle(
-                          color: Color(0xFFED1C24),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
+Text(
+            'S/ ${_formatearPrecio(producto['precio'])}',
+            style: TextStyle(
+              color: (producto['precioAntes'] != null && 
+                      producto['precioAntes'] > 0 && 
+                      producto['precioAntes'] != producto['precio'])
+                  ? const Color(0xFFED1C24)
+                  : Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
                       if (descuentoPorcentaje > 0) ...[
                         const SizedBox(width: 8),
                         Container(
@@ -188,6 +192,7 @@ class ProductoCard extends StatelessWidget {
                     ],
                   ),
                   if (producto['precioAntes'] != null &&
+                      producto['precioAntes'] > 0 &&
                       producto['precioAntes'] != producto['precio']) ...[
                     const SizedBox(height: 2),
                     Stack(
