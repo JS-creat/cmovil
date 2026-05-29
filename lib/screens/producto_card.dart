@@ -18,32 +18,27 @@ class ProductoCard extends StatelessWidget {
     this.onCorazonTap,
   });
 
-  // Función para formatear precio de manera segura
   String _formatearPrecio(dynamic precio) {
     if (precio == null) return '0.00';
-
     if (precio is int) return precio.toStringAsFixed(2);
     if (precio is double) return precio.toStringAsFixed(2);
-
-    if (precio is String) {
-      final numero = double.tryParse(precio);
-      return numero?.toStringAsFixed(2) ?? '0.00';
-    }
-
+    if (precio is String)
+      return double.tryParse(precio)?.toStringAsFixed(2) ?? '0.00';
     return '0.00';
   }
 
   @override
   Widget build(BuildContext context) {
-    String imagenOriginal =
-        producto['imagen_principal']?.toString().trim() ?? '';
-
-    final String imagenPrincipal = imagenOriginal.replaceFirst(
-      '${ApiConfig.baseUrl}/productos/',
-      '${ApiConfig.apiUrl}/imagen/',
+    // ─── URL construida por el helper centralizado en ApiConfig ───
+    final String imagenUrl = ApiConfig.imagenProducto(
+      producto['imagen_principal']?.toString(),
     );
 
-    int descuentoPorcentaje = producto['descuento'] ?? 0;
+    final int descuentoPorcentaje = producto['descuento'] ?? 0;
+    final dynamic precioAntes = producto['precioAntes'];
+    final dynamic precio = producto['precio'];
+    final bool tieneOferta =
+        precioAntes != null && precioAntes > 0 && precioAntes != precio;
 
     return GestureDetector(
       onTap: onTap,
@@ -63,14 +58,14 @@ class ProductoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Imagen del producto
+            // ─── Imagen ───
             ClipRRect(
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(18),
               ),
-              child: imagenPrincipal.isNotEmpty
+              child: imagenUrl.isNotEmpty
                   ? Image.network(
-                      imagenPrincipal,
+                      imagenUrl,
                       height: 220,
                       width: double.infinity,
                       fit: BoxFit.cover,
@@ -92,6 +87,7 @@ class ProductoCard extends StatelessWidget {
                         );
                       },
                       errorBuilder: (context, error, stackTrace) {
+                        debugPrint('❌ Imagen no encontrada: $imagenUrl');
                         return Container(
                           height: 220,
                           color: Colors.grey.shade100,
@@ -117,11 +113,14 @@ class ProductoCard extends StatelessWidget {
                       ),
                     ),
             ),
+
+            // ─── Info ───
             Padding(
               padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Título + corazón
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -154,20 +153,21 @@ class ProductoCard extends StatelessWidget {
                         ),
                     ],
                   ),
+                  const SizedBox(height: 4),
+
+                  // Precio + badge descuento
                   Row(
                     children: [
-Text(
-            'S/ ${_formatearPrecio(producto['precio'])}',
-            style: TextStyle(
-              color: (producto['precioAntes'] != null && 
-                      producto['precioAntes'] > 0 && 
-                      producto['precioAntes'] != producto['precio'])
-                  ? const Color(0xFFED1C24)
-                  : Colors.black,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
+                      Text(
+                        'S/ ${_formatearPrecio(precio)}',
+                        style: TextStyle(
+                          color: tieneOferta
+                              ? const Color(0xFFED1C24)
+                              : Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                       if (descuentoPorcentaje > 0) ...[
                         const SizedBox(width: 8),
                         Container(
@@ -191,16 +191,16 @@ Text(
                       ],
                     ],
                   ),
-                  if (producto['precioAntes'] != null &&
-                      producto['precioAntes'] > 0 &&
-                      producto['precioAntes'] != producto['precio']) ...[
+
+                  // Precio anterior tachado
+                  if (tieneOferta) ...[
                     const SizedBox(height: 2),
                     Stack(
                       children: [
                         Text(
-                          'S/ ${_formatearPrecio(producto['precioAntes'])}',
+                          'S/ ${_formatearPrecio(precioAntes)}',
                           style: TextStyle(
-                            color: Colors.grey.shade700,
+                            color: Colors.grey.shade600,
                             fontSize: 12,
                           ),
                         ),
@@ -210,7 +210,7 @@ Text(
                             child: Container(
                               height: 1,
                               width: 60,
-                              color: Colors.grey.shade700,
+                              color: Colors.grey.shade600,
                             ),
                           ),
                         ),

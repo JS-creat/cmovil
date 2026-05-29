@@ -31,7 +31,7 @@ class _ChatState extends State<Chat> {
         setState(() {
           _messages.add({
             'text':
-                "¡Hola, soy Alessia, el asistente de C'Lucky. Estoy aquí para ayudarte en tus consultas. ¿En qué puedo ayudarte?",
+                "¡Hola, soy Alessia, el asistente de B-EDEN. Estoy aquí para ayudarte en tus consultas. ¿En qué puedo ayudarte?",
             'isUser': false,
             'timestamp': DateTime.now(),
           });
