@@ -29,6 +29,7 @@ import 'package:lucky/screens/registro_usuario.dart';
 import 'package:lucky/screens/perfil.dart';
 import 'package:lucky/services/pref_service.dart';
 import 'package:pusher_beams/pusher_beams.dart';
+import 'package:lucky/screens/detalles_pedido_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -252,6 +253,15 @@ final _router = GoRouter(
       path: '/informacion-cuenta',
       name: 'informacionCuenta',
       builder: (context, state) => const InformacionCuenta(),
+    ),
+    GoRoute(
+      path: '/detalle-pedido',
+      name: 'detallePedido',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        final pedido = extra['pedido'];
+        return DetallesPedidoScreen(pedido: pedido);
+      },
     ),
   ],
 );

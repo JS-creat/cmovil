@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucky/models/auth_model.dart';
 import 'package:lucky/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 🔥 Importamos la persistencia web
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -31,21 +32,43 @@ class AuthProvider extends ChangeNotifier {
     _isChecking = true;
     notifyListeners();
 
-    final hasToken = await _authService.isLoggedIn();
+    // 1. Intentamos recuperar primero el token guardado físicamente en el navegador web
+    final prefs = await SharedPreferences.getInstance();
+    final tokenGuardado = prefs.getString('auth_token');
 
-    if (hasToken) {
+    if (tokenGuardado != null && tokenGuardado.isNotEmpty) {
       try {
+        // Le inyectamos el token temporal a tu servicio HTTP antes de mandar a llamar al perfil
+        _token = tokenGuardado;
+        
         final usuario = await _authService.getPerfil();
-        final token = await _authService.getStoredToken();
 
         if (usuario.id > 0) {
           _usuario = usuario;
-          _token = token;
         } else {
-          await _authService.logout();
+          await logout();
         }
       } catch (e) {
-        await _authService.logout();
+        print("Error recuperando perfil tras recarga: $e");
+        await logout();
+      }
+    } else {
+      // Fallback secundario con el método por defecto de tu servicio actual
+      final hasToken = await _authService.isLoggedIn();
+      if (hasToken) {
+        try {
+          final usuario = await _authService.getPerfil();
+          final token = await _authService.getStoredToken();
+
+          if (usuario.id > 0) {
+            _usuario = usuario;
+            _token = token;
+          } else {
+            await logout();
+          }
+        } catch (e) {
+          await logout();
+        }
       }
     }
 
@@ -69,6 +92,11 @@ class AuthProvider extends ChangeNotifier {
 
         _usuario = response.user;
         _token = response.token;
+
+        // 🔥 CORRECCIÓN: Almacenamos el token en la memoria persistente del navegador web
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', response.token!);
+
         _isLoading = false;
         notifyListeners();
         return true;
@@ -102,6 +130,10 @@ class AuthProvider extends ChangeNotifier {
         if (response.token != null) {
           _usuario = response.user;
           _token = response.token;
+
+          // 🔥 CORRECCIÓN: Almacenamos el token al registrar una cuenta nueva
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('auth_token', response.token!);
         }
         _isLoading = false;
         notifyListeners();
@@ -203,6 +235,11 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     await _authService.logout();
+    
+    // 🔥 CORRECCIÓN: Al cerrar sesión limpiamos la memoria física
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+
     _usuario = null;
     _token = null;
     notifyListeners();

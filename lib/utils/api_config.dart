@@ -4,6 +4,9 @@ class ApiConfig {
 
   static String get broadcastAuthUrl => '$apiUrl/broadcasting/auth';
   static String get chatMessageUrl => '$apiUrl/chat/message';
+  
+  // NUEVO: Ruta dinámica para consultar un pedido por su ID
+  static String pedidoDetalleUrl(dynamic id) => '$apiUrl/pedidos/$id';
 
   static String imagenProducto(String? filename) {
     if (filename == null || filename.trim().isEmpty) return '';
