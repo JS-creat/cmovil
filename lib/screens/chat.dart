@@ -31,7 +31,7 @@ class _ChatState extends State<Chat> {
         setState(() {
           _messages.add({
             'text':
-                "¡Hola, soy Alessia, el asistente de B-EDEN. Estoy aquí para ayudarte en tus consultas. ¿En qué puedo ayudarte?",
+                "Hola, soy Alessia, el asistente IA de B-EDEN. Estoy aquí para ayudarte en tus consultas. ¿En qué puedo ayudarte?",
             'isUser': false,
             'timestamp': DateTime.now(),
           });
@@ -162,6 +162,39 @@ class _ChatState extends State<Chat> {
       });
     }
     _scrollToBottom();
+  }
+
+  Widget _buildMessageText(String text, bool isUser) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.*?)\*\*');
+    int last = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > last) {
+        spans.add(TextSpan(text: text.substring(last, match.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(1),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
+      last = match.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last)));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          color: isUser ? Colors.white : Colors.black87,
+          fontSize: 14,
+          height: 1.3,
+        ),
+        children: spans,
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -349,14 +382,7 @@ class _ChatState extends State<Chat> {
                       constraints: BoxConstraints(
                         maxWidth: MediaQuery.of(context).size.width * 0.75,
                       ),
-                      child: Text(
-                        msg['text'],
-                        style: TextStyle(
-                          color: isUser ? Colors.white : Colors.black87,
-                          fontSize: 14,
-                          height: 1.3,
-                        ),
-                      ),
+                      child: _buildMessageText(msg['text'], isUser),
                     ),
                   );
                 },
@@ -373,11 +399,14 @@ class _ChatState extends State<Chat> {
                     child: TextField(
                       controller: _controller,
                       textCapitalization: TextCapitalization.sentences,
+                      keyboardType: TextInputType.multiline,
+                      minLines: 1,
+                      maxLines: 5,
                       decoration: InputDecoration(
                         hintText: 'Escribe un mensaje...',
                         hintStyle: TextStyle(color: Colors.grey.shade500),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
@@ -387,7 +416,6 @@ class _ChatState extends State<Chat> {
                           vertical: 10,
                         ),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
