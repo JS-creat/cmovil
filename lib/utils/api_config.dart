@@ -3,8 +3,8 @@ class ApiConfig {
   static const String apiUrl = '$baseUrl/api';
 
   static String get broadcastAuthUrl => '$apiUrl/broadcasting/auth';
-  static String get chatMessageUrl => '$apiUrl/chat/message';
-  
+  static String get chatMessageUrl => 'http://2.24.94.167:8000/api/chat';
+
   // NUEVO: Ruta dinámica para consultar un pedido por su ID
   static String pedidoDetalleUrl(dynamic id) => '$apiUrl/pedidos/$id';
 

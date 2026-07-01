@@ -31,7 +31,7 @@ class _ChatState extends State<Chat> {
         setState(() {
           _messages.add({
             'text':
-                "¡Hola, soy Alessia, el asistente de B-EDEN. Estoy aquí para ayudarte en tus consultas. ¿En qué puedo ayudarte?",
+                "Hola, soy Alessia, el asistente IA de B-EDEN. Estoy aquí para ayudarte en tus consultas. ¿En qué puedo ayudarte?",
             'isUser': false,
             'timestamp': DateTime.now(),
           });
@@ -45,9 +45,7 @@ class _ChatState extends State<Chat> {
     final userId = authProvider.usuario?.id.toString() ?? 'guest';
     final token = authProvider.token;
 
-    if (token == null) {
-      return;
-    }
+    if (token == null) return;
 
     await _pusherConfig.initPusher(
       channelName: 'private-chat.$userId',
@@ -86,6 +84,28 @@ class _ChatState extends State<Chat> {
     final text = _controller.text;
     _controller.clear();
 
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    // 1. VALIDACIÓN EN EL MÓVIL: Si el usuario no ha iniciado sesión
+    if (authProvider.token == null || authProvider.usuario == null) {
+      setState(() {
+        _messages.add({
+          'text': text,
+          'isUser': true,
+          'timestamp': DateTime.now(),
+        });
+        _messages.add({
+          'text':
+              'Para poder conversar con Alessia, por favor inicia sesión en tu cuenta primero.',
+          'isUser': false,
+          'timestamp': DateTime.now(),
+        });
+      });
+      _scrollToBottom();
+      return; // Detiene la ejecución aquí, evita enviar la petición al servidor
+    }
+
+    // 2. FLUJO NORMAL: Si está logueado, intentamos enviar el mensaje
     setState(() {
       _messages.add({
         'text': text,
@@ -97,30 +117,84 @@ class _ChatState extends State<Chat> {
     _scrollToBottom();
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.usuario?.id;
 
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/chat/message'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${authProvider.token}',
-        },
-        body: jsonEncode({'user_id': userId, 'message': text}),
-      );
+      // Le ponemos un límite de 5 segundos de espera al servidor web
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/chat/message'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${authProvider.token}',
+            },
+            body: jsonEncode({'user_id': userId, 'message': text}),
+          )
+          .timeout(const Duration(seconds: 5));
 
-      if (response.statusCode != 200) {
-        throw Exception('Error enviando mensaje: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        setState(() {
+          // Si el backend te devuelve el mensaje directo en el body de la respuesta
+          _messages.add({
+            'text':
+                data['message'] ??
+                data['mensaje'] ??
+                'Conexión exitosa, pero sin respuesta.',
+            'isUser': false,
+            'timestamp': DateTime.now(),
+          });
+          _isLoading = false;
+        });
+      } else {
+        throw Exception('Error del servidor');
       }
     } catch (e) {
+      // 3. RESPUESTA DE CAÍDA / ERROR
       setState(() {
         _messages.add({
-          'text': 'Lo siento, hubo un error. Intenta de nuevo.',
+          'text':
+              'Lo siento, en este momento no puedo conectarme con el servidor. Por favor, inténtalo más tarde.',
           'isUser': false,
+          'timestamp': DateTime.now(),
         });
         _isLoading = false;
       });
     }
+    _scrollToBottom();
+  }
+
+  Widget _buildMessageText(String text, bool isUser) {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.*?)\*\*');
+    int last = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > last) {
+        spans.add(TextSpan(text: text.substring(last, match.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(1),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
+      last = match.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(text: text.substring(last)));
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          color: isUser ? Colors.white : Colors.black87,
+          fontSize: 14,
+          height: 1.3,
+        ),
+        children: spans,
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -146,234 +220,218 @@ class _ChatState extends State<Chat> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF4F6F9), // Fondo sutil estilo chat
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leadingWidth: 40,
+        titleSpacing: 8,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: GestureDetector(
+            onTap: () => context.pop(),
+            child: const Icon(Icons.arrow_back, color: Colors.black),
+          ),
+        ),
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: const Color(0xFFED1C24).withAlpha(30),
+              child: const Icon(Icons.support_agent, color: Color(0xFFED1C24)),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Alessia (B-EDEN)',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'En línea',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          Consumer<CarritoProvider>(
+            builder: (context, carritoProvider, child) {
+              final cantidadTotal = carritoProvider.cantidadTotal;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    onPressed: () => context.push('/carrito'),
+                    icon: const Icon(
+                      Icons.shopping_cart_outlined,
+                      size: 24,
+                      color: Colors.black,
+                    ),
+                  ),
+                  if (cantidadTotal > 0)
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFED1C24),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          cantidadTotal > 9 ? '9+' : cantidadTotal.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: Colors.black12, height: 1),
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 7,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        GestureDetector(
-                          onTap: () => context.pop(),
-                          child: const Icon(
-                            Icons.arrow_back,
-                            size: 24,
-                            color: Colors.black,
+            // Lista de Mensajes
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 20,
+                ),
+                itemCount: _messages.length + (_isLoading ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (_isLoading && index == _messages.length) {
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFECEFF1),
+                          borderRadius: BorderRadius.circular(
+                            16,
+                          ).copyWith(bottomLeft: const Radius.circular(0)),
+                        ),
+                        child: const _TypingIndicator(),
+                      ),
+                    );
+                  }
+
+                  final msg = _messages[index];
+                  final isUser = msg['isUser'];
+
+                  return Align(
+                    alignment: isUser
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isUser
+                            ? const Color.fromARGB(255, 0, 0, 0)
+                            : const Color(0xFFECEFF1),
+                        borderRadius: BorderRadius.circular(16).copyWith(
+                          bottomRight: isUser ? const Radius.circular(0) : null,
+                          bottomLeft: !isUser ? const Radius.circular(0) : null,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(10),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
-                        const Text(
-                          'Chat',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Consumer<CarritoProvider>(
-                          builder: (context, carritoProvider, child) {
-                            final cantidadTotal = carritoProvider.cantidadTotal;
-                            return Stack(
-                              children: [
-                                IconButton(
-                                  onPressed: () => context.push('/carrito'),
-                                  icon: const Icon(
-                                    Icons.shopping_cart_outlined,
-                                    size: 28,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                                if (cantidadTotal > 0)
-                                  Positioned(
-                                    right: 0,
-                                    top: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFED1C24),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      constraints: const BoxConstraints(
-                                        minWidth: 20,
-                                        minHeight: 20,
-                                      ),
-                                      child: Text(
-                                        cantidadTotal > 9
-                                            ? '9+'
-                                            : cantidadTotal.toString(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
+                        ],
+                      ),
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.75,
+                      ),
+                      child: _buildMessageText(msg['text'], isUser),
                     ),
-                  ),
-                  Container(height: 1, color: Colors.black12),
-                ],
+                  );
+                },
               ),
             ),
 
-            Expanded(
-              child: Container(
-                color: const Color(0xFFF7F7F7),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _messages.length + (_isLoading ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (_isLoading && index == _messages.length) {
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  borderRadius: BorderRadius.circular(20)
-                                      .copyWith(
-                                        bottomLeft: const Radius.circular(4),
-                                      ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withAlpha(40),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    SizedBox(width: 4),
-                                    _TypingIndicator(),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-
-                          final msg = _messages[index];
-                          final isUser = msg['isUser'];
-
-                          return Align(
-                            alignment: isUser
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isUser ? Colors.white : Colors.black,
-                                borderRadius: BorderRadius.circular(20)
-                                    .copyWith(
-                                      bottomRight: isUser
-                                          ? const Radius.circular(4)
-                                          : null,
-                                      bottomLeft: !isUser
-                                          ? const Radius.circular(4)
-                                          : null,
-                                    ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withAlpha(40),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    MediaQuery.of(context).size.width * 0.75,
-                              ),
-                              child: Text(
-                                msg['text'],
-                                style: TextStyle(
-                                  color: isUser ? Colors.black : Colors.white,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+            // Input de Envío de Mensajes
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      textCapitalization: TextCapitalization.sentences,
+                      keyboardType: TextInputType.multiline,
+                      minLines: 1,
+                      maxLines: 5,
+                      decoration: InputDecoration(
+                        hintText: 'Escribe un mensaje...',
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF4F6F9),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
                       ),
                     ),
-
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _sendMessage,
+                    child: CircleAvatar(
+                      radius: 22,
+                      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
+                      child: const Icon(
+                        Icons.send_rounded,
                         color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withAlpha(25),
-                            blurRadius: 8,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _controller,
-                              decoration: InputDecoration(
-                                hintText: 'Escribe aquí...',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                              ),
-                              onSubmitted: (_) => _sendMessage(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          CircleAvatar(
-                            backgroundColor: Colors.black,
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.send,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              onPressed: _sendMessage,
-                            ),
-                          ),
-                        ],
+                        size: 20,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -383,6 +441,7 @@ class _ChatState extends State<Chat> {
   }
 }
 
+// Indicador de Escritura Ajustado
 class _TypingIndicator extends StatefulWidget {
   const _TypingIndicator();
 
@@ -428,11 +487,11 @@ class __TypingIndicatorState extends State<_TypingIndicator>
           animation: _animations[index],
           builder: (context, child) {
             return Container(
-              width: 4,
-              height: 4,
-              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(
-                color: Colors.white.withAlpha(
+                color: Colors.grey.shade600.withAlpha(
                   (_animations[index].value * 255).round().clamp(0, 255),
                 ),
                 shape: BoxShape.circle,

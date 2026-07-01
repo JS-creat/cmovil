@@ -17,15 +17,24 @@ class _MainLayoutState extends State<MainLayout> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFFB0B3C1),
+        elevation: 4,
+        shape: const CircleBorder(),
+        onPressed: () => context.push('/chat'),
+        child: const Icon(
+          Icons.chat_bubble_rounded,
+          color: Colors.black,
+          size: 26,
+        ),
+      ),
+
       bottomNavigationBar: BarraNavegacion(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: (index) {
-          // 🔥 Lógica especial para el índice de Mi cuenta (índice 4)
           if (index == 4) {
-            widget.navigationShell.goBranch(
-              4,
-              initialLocation: true, // Siempre ir a la rama 4
-            );
+            widget.navigationShell.goBranch(4, initialLocation: true);
           } else {
             widget.navigationShell.goBranch(
               index,

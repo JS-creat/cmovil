@@ -4,7 +4,9 @@ import 'package:lucky/utils/api_config.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
 class PusherConfig {
-  late PusherChannelsFlutter pusher;
+  PusherChannelsFlutter? pusher;
+
+  // TODO: Mover estas dos variables a ApiConfig más adelante para máxima seguridad
   final String appKey = '43bc7bcfe4694589cbf6';
   final String cluster = 'mt1';
   final String authUrl = ApiConfig.broadcastAuthUrl;
@@ -15,10 +17,12 @@ class PusherConfig {
     required Function(dynamic) onEventTriggered,
     String? authToken,
   }) async {
+    // Inicializamos la instancia
     pusher = PusherChannelsFlutter.getInstance();
 
     try {
-      await pusher.init(
+      // Usamos el operador ! porque justo arriba nos aseguramos de que no sea nulo
+      await pusher!.init(
         apiKey: appKey,
         cluster: cluster,
         authEndpoint: authUrl,
@@ -48,14 +52,15 @@ class PusherConfig {
         },
       );
 
-      await pusher.connect();
-      await pusher.subscribe(channelName: channelName);
+      await pusher!.connect();
+      await pusher!.subscribe(channelName: channelName);
     } catch (e) {
       print('Error iniciando Pusher: $e');
     }
   }
 
   Future<void> disconnect() async {
-    await pusher.disconnect();
+    // Usamos ?. para que si 'pusher' es nulo, simplemente no haga nada y no rompa la app
+    await pusher?.disconnect();
   }
 }
