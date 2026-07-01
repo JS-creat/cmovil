@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../widgets/info_pedido_box.dart';
+import '../utils/api_config.dart';
 
 class DetallesPedidoScreen extends StatelessWidget {
   final dynamic pedido; 
@@ -26,26 +28,54 @@ class DetallesPedidoScreen extends StatelessWidget {
     }
   }
 
+  String _formatearFecha(dynamic fecha) {
+    if (fecha == null) return '—';
+    try {
+      final date = DateTime.parse(fecha.toString());
+      final dia = date.day.toString().padLeft(2, '0');
+      final mes = date.month.toString().padLeft(2, '0');
+      final anio = date.year.toString();
+      return '$dia/$mes/$anio';
+    } catch (e) {
+      return fecha.toString();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Diagnóstico en consola de desarrollo para verificar la estructura exacta recibida
     print("--- DEBÚG DETALLES PEDIDO ---");
     print("Contenido del objeto pedido: $pedido");
 
     final String estadoTexto = (pedido['estado'] ?? 
                                pedido['status'] ?? 
                                pedido['estado_pedido'] ?? 'Pendiente').toString();
-                               
-    final int pasoActual = _obtenerPasoEstado(estadoTexto);
-    
-    // 🟢 CORRECCIÓN AQUÍ: Forzamos toLowerCase() para que "ENTREGADO" en mayúsculas también sea capturado
-    final bool esEntregado = estadoTexto.toLowerCase().trim() == 'entregado' || 
-                             estadoTexto.toLowerCase().trim() == 'completado';
-                             
-    // Si está entregado se vuelve verdesito (0xFF2E7D32), si no, se queda en el rojo corporativo
-    final Color colorTematico = esEntregado ? const Color(0xFF2E7D32) : const Color(0xFFED1C24);
-    
-    final totalPedido = pedido['precio_total'] ?? pedido['total'] ?? pedido['precio'] ?? '69.90';
+    final String estadoLimpioParaColor = estadoTexto.toLowerCase().trim();
+
+    // 🟢 FIX: detectamos también el estado "anulado"/"cancelado"
+    final bool esEntregado = estadoLimpioParaColor == 'entregado' || 
+                             estadoLimpioParaColor == 'completado';
+    final bool esAnulado = estadoLimpioParaColor == 'anulado' || 
+                           estadoLimpioParaColor == 'cancelado';
+
+    // Verde si entregado, gris si anulado, rojo corporativo en cualquier otro caso
+    final Color colorTematico = esEntregado 
+        ? const Color(0xFF2E7D32)
+        : esAnulado 
+            ? Colors.grey.shade600
+            : const Color(0xFFED1C24);
+
+    // 🟢 La etiqueta "ANULADO" se muestra en rojo aunque el stepper se quede gris
+    final Color colorEtiquetaEstado = esAnulado
+        ? const Color(0xFFED1C24)
+        : colorTematico;
+
+    // Si está anulado, el stepper se queda clavado en "Pendiente" (no avanza)
+    final int pasoActual = esAnulado ? 0 : _obtenerPasoEstado(estadoTexto);
+
+    // 🟢 FIX: quitamos el '69.90' hardcodeado. Revisa el print de consola
+    // ("Contenido del objeto pedido: $pedido") para confirmar el nombre real
+    // del campo de precio en tu API y agrégalo aquí si falta.
+    final totalPedido = pedido['total_pedido'] ?? pedido['precio_total'] ?? pedido['total'] ?? '0.00';
     final codigoPedido = pedido['codigo'] ?? pedido['numero_pedido'] ?? pedido['codigo_pedido'] ?? pedido['id']?.toString() ?? '';
     final tipoEntrega = pedido['tipo_entrega'] ?? 'Recojo en tienda';
     
@@ -64,7 +94,6 @@ class DetallesPedidoScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Tarjeta Monto Pagado
             Card(
               color: Colors.white,
               elevation: 0,
@@ -77,7 +106,8 @@ class DetallesPedidoScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
+                    Flexible(
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Monto Pagado', style: TextStyle(color: Colors.grey, fontSize: 13)),
@@ -87,17 +117,18 @@ class DetallesPedidoScreen extends StatelessWidget {
                           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                         ),
                       ],
+                      ),
                     ),
-                    // 🟢 Ahora sí pintará de color verde dinámico la etiqueta superior
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: colorTematico.withOpacity(0.1),
+                        color: colorEtiquetaEstado.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         estadoTexto.toUpperCase(),
-                        style: TextStyle(color: colorTematico, fontWeight: FontWeight.bold, fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colorEtiquetaEstado, fontWeight: FontWeight.bold, fontSize: 11),
                       ),
                     )
                   ],
@@ -106,28 +137,67 @@ class DetallesPedidoScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Tarjeta Tipo Entrega
-            Card(
-              color: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.shade200),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Tipo entrega', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Text(
-                      tipoEntrega,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.black87),
+            // 🟢 MODIFICACIÓN AQUÍ: Fila adaptada con Tipo entrega y Cajas de fechas integradas (Estilo Web)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // LADO IZQUIERDO: Tarjeta Tipo Entrega
+                Expanded(
+                  flex: 4,
+                  child: Card(
+                    color: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey.shade200),
                     ),
-                  ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Tipo entrega', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          const SizedBox(height: 6),
+                          Text(
+                            tipoEntrega,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+
+                Expanded(
+                  flex: 6,
+                  child: Column(
+                    children: [
+                      InfoPedidoBox(
+                        titulo: 'Fecha envío',
+                        fecha: _formatearFecha(pedido['fecha_envio']),
+                        colorFondo: const Color(0xFFE3F2FD),
+                        colorTexto: const Color(0xFF0D47A1),
+                        icono: Icons.local_shipping_outlined,
+                      ),
+                      InfoPedidoBox(
+                        titulo: 'Entrega estimada',
+                        fecha: _formatearFecha(pedido['fecha_entrega_estimada']),
+                        colorFondo: const Color(0xFFFFFDE7),
+                        colorTexto: const Color(0xFFF57F17),
+                        icono: Icons.calendar_today_outlined,
+                      ),
+                      InfoPedidoBox(
+                        titulo: 'Entregado el',
+                        fecha: _formatearFecha(pedido['fecha_entrega_real']),
+                        colorFondo: const Color(0xFFE8F5E9),
+                        colorTexto: const Color(0xFF1B5E20),
+                        icono: Icons.check_circle_outline,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
 
@@ -144,32 +214,31 @@ class DetallesPedidoScreen extends StatelessWidget {
                 itemCount: productos.length,
                 itemBuilder: (context, index) {
                   final item = productos[index];
-                  
-                  final productoInfo = item['producto'] ?? item;
-                  
-                  final String titulo = item['nombre_producto'] ?? 
-                                       productoInfo['nombre'] ?? 
-                                       productoInfo['titulo'] ?? 
-                                       item['titulo_producto'] ?? 'Producto';
-                  
-                  final String? imagenRaw = item['foto_producto'] ?? 
-                                           productoInfo['foto'] ?? 
-                                           productoInfo['imagen'] ?? 
-                                           item['foto'] ?? 
-                                           productoInfo['imagen_url'];
-                  
-                  String? imagenUrl = imagenRaw;
-                  if (imagenUrl != null && imagenUrl.isNotEmpty) {
-                    if (!imagenUrl.startsWith('http')) {
-                      if (imagenUrl.contains('productos/')) {
-                        imagenUrl = 'https://www.bedenb.com/' + (imagenUrl.startsWith('/') ? imagenUrl.substring(1) : imagenUrl);
-                      } else {
-                        imagenUrl = 'https://www.bedenb.com/productos/' + (imagenUrl.startsWith('/') ? imagenUrl.substring(1) : imagenUrl);
-                      }
-                    }
-                  }
 
-                  final precioItem = item['precio'] ?? item['precio_unitario'] ?? productoInfo['precio'] ?? '0.00';
+                  // 🟢 FIX: el producto real está anidado en item['variante']['producto'],
+                  // no directo en item ni en item['producto']
+                  final variante = item['variante'] ?? {};
+                  final productoInfo = variante['producto'] ?? item['producto'] ?? item;
+
+                  final String titulo = productoInfo['nombre_producto'] ??
+                                       item['nombre_producto'] ??
+                                       productoInfo['nombre'] ??
+                                       productoInfo['titulo'] ??
+                                       item['titulo_producto'] ?? 'Producto';
+
+                  final String? imagenRaw = productoInfo['imagen'] ??
+                                       item['foto_producto'] ??
+                                       productoInfo['foto'] ??
+                                       item['foto'] ??
+                                       productoInfo['imagen_url'];
+
+                  final String imagenUrl = ApiConfig.imagenProducto(imagenRaw);
+
+                  // Usamos precio_unitario del detalle (ya viene correcto por línea de pedido)
+                  final precioItem = item['precio_unitario'] ??
+                                    item['precio'] ??
+                                    productoInfo['precio_oferta'] ??
+                                    productoInfo['precio'] ?? '0.00';
                   final cantidad = item['cantidad'] ?? 1;
 
                   return Card(
@@ -186,7 +255,7 @@ class DetallesPedidoScreen extends StatelessWidget {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: (imagenUrl != null && imagenUrl.isNotEmpty)
+                            child: (imagenUrl.isNotEmpty)
                                 ? Image.network(
                                     imagenUrl,
                                     width: 50,
@@ -250,7 +319,6 @@ class DetallesPedidoScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // 🟢 El Stepper ahora sí cambiará dinámicamente sus líneas y círculos a verde al estar entregado
             Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: ColorScheme.light(primary: colorTematico),
@@ -278,7 +346,9 @@ class DetallesPedidoScreen extends StatelessWidget {
                     ),
                     Step(
                       title: const Text('En Camino', style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text('El motorizado está en ruta'),
+                      subtitle: Text(tipoEntrega == 'Recojo en tienda' 
+                        ? 'El pedido está siendo preparado para la tienda' 
+                        : 'El motorizado está en ruta'),
                       content: const SizedBox.shrink(),
                       isActive: pasoActual >= 2,
                       state: pasoActual > 2 ? StepState.complete : (pasoActual == 2 ? StepState.editing : StepState.indexed),

@@ -79,21 +79,21 @@ class _DetallesProductoState extends State<DetallesProducto> {
     List<String> todasLasImagenes = [];
 
     // 1. Agregar imagen principal (si existe)
+    // 🟢 FIX: imagenPrincipal llega como solo el nombre del archivo
+    // (ej: "6a0e637701fea.jpg"), no como URL completa. Usamos el helper
+    // ApiConfig.imagenProducto() que arma correctamente la URL pública.
     if (_producto.imagenPrincipal.isNotEmpty) {
-      String imgPrincipal = _producto.imagenPrincipal.replaceFirst(
-        '${ApiConfig.baseUrl}/productos/',
-        '${ApiConfig.apiUrl}/imagen/',
-      );
-      todasLasImagenes.add(imgPrincipal);
+      String imgPrincipal = ApiConfig.imagenProducto(_producto.imagenPrincipal);
+      if (imgPrincipal.isNotEmpty) {
+        todasLasImagenes.add(imgPrincipal);
+      }
     }
 
     // 2. Agregar imágenes de galería (sin duplicar la principal)
-    for (var url in _producto.imagenes) {
-      String urlTransformada = url.replaceFirst(
-        '${ApiConfig.baseUrl}/productos/',
-        '${ApiConfig.apiUrl}/imagen/',
-      );
-      if (!todasLasImagenes.contains(urlTransformada)) {
+    for (var filename in _producto.imagenes) {
+      String urlTransformada = ApiConfig.imagenProducto(filename);
+      if (urlTransformada.isNotEmpty &&
+          !todasLasImagenes.contains(urlTransformada)) {
         todasLasImagenes.add(urlTransformada);
       }
     }
@@ -103,10 +103,7 @@ class _DetallesProductoState extends State<DetallesProducto> {
 
   // TRANSFORMAR IMAGEN PRINCIPAL (por si se usa)
   String get imagenPrincipalTransformada {
-    return _producto.imagenPrincipal.replaceFirst(
-      '${ApiConfig.baseUrl}/productos/',
-      '${ApiConfig.apiUrl}/imagen/',
-    );
+    return ApiConfig.imagenProducto(_producto.imagenPrincipal);
   }
 
   String _formatearPrecio(dynamic precio) {
@@ -205,16 +202,10 @@ class _DetallesProductoState extends State<DetallesProducto> {
       'precio': _producto.precio,
       'precioAntes': _producto.precioAntes,
       'descuento': _producto.descuento,
-      'imagenes': _producto.imagenes.map((url) {
-        return url.replaceFirst(
-          '${ApiConfig.baseUrl}/productos/',
-          '${ApiConfig.apiUrl}/imagen/',
-        );
+      'imagenes': _producto.imagenes.map((filename) {
+        return ApiConfig.imagenProducto(filename);
       }).toList(),
-      'imagen_principal': _producto.imagenPrincipal.replaceFirst(
-        '${ApiConfig.baseUrl}/productos/',
-        '${ApiConfig.apiUrl}/imagen/',
-      ),
+      'imagen_principal': ApiConfig.imagenProducto(_producto.imagenPrincipal),
       'talla': _tallaSeleccionada,
       'color': _colorSeleccionado,
       'cantidad': 1,
@@ -227,7 +218,13 @@ class _DetallesProductoState extends State<DetallesProducto> {
   @override
   Widget build(BuildContext context) {
     int descuentoPorcentaje = _producto.descuento ?? 0;
-    bool tienePrecioAnterior = _producto.precioAntes != null;
+    final precioAntesValor = _producto.precioAntes;
+    bool tienePrecioAnterior =
+        precioAntesValor != null && precioAntesValor > 0;
+    // El precio principal solo va en rojo si hay descuento/precio anterior real,
+    // si no, se ve negro-negrita igual que en la tarjeta del catálogo.
+    final Color colorPrecioPrincipal =
+        tienePrecioAnterior ? const Color(0xFFED1C24) : Colors.black;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -423,8 +420,8 @@ class _DetallesProductoState extends State<DetallesProducto> {
                               children: [
                                 Text(
                                   'S/ ${_formatearPrecio(_producto.precio)}',
-                                  style: const TextStyle(
-                                    color: Color(0xFFED1C24),
+                                  style: TextStyle(
+                                    color: colorPrecioPrincipal,
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -728,7 +725,7 @@ class _DetallesProductoState extends State<DetallesProducto> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                esFavorito ? 'En favoritos' : 'A favoritos',
+                                esFavorito ? 'En favoritos' : 'Agregar a favoritos',
                                 style: const TextStyle(fontSize: 16),
                               ),
                             ],
@@ -767,7 +764,7 @@ class _DetallesProductoState extends State<DetallesProducto> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            _combinacionDisponible ? 'Al carrito' : 'Sin stock',
+                            _combinacionDisponible ? 'Añadir al carrito' : 'Sin stock',
                             style: const TextStyle(fontSize: 16),
                           ),
                         ],

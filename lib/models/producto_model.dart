@@ -64,7 +64,9 @@ class ProductoModel {
       titulo: json['nombre_producto'] ?? json['titulo'] ?? '',
       descripcion: json['descripcion'] ?? '',
       precio: toDouble(json['precio'] ?? 0),
-      precioAntes: toDouble(json['precio_oferta'] ?? json['precio_antes']),
+      precioAntes: toDouble(
+        json['precio_oferta'] ?? json['precio_antes'] ?? json['precioAntes'],
+      ),
       descuento: json['descuento'],
       imagenes: json['imagenes'] != null
           ? List<String>.from(json['imagenes'])
