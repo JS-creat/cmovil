@@ -238,8 +238,10 @@ class _ChatState extends State<Chat> {
           children: [
             CircleAvatar(
               radius: 20,
+              backgroundImage: const AssetImage(
+                'assets/images/alessia_avatar.png',
+              ),
               backgroundColor: const Color(0xFFED1C24).withAlpha(30),
-              child: const Icon(Icons.support_agent, color: Color(0xFFED1C24)),
             ),
             const SizedBox(width: 12),
             const Column(
