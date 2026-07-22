@@ -1,5 +1,6 @@
 import 'package:lucky/models/producto_model.dart';
 import 'package:lucky/models/variante_model.dart';
+import 'package:lucky/utils/api_config.dart';
 
 class ItemCarritoModel {
   final int idDetalle;
@@ -32,8 +33,14 @@ class ItemCarritoModel {
       'precio': producto.precio,
       'precioAntes': producto.precioAntes,
       'descuento': producto.descuento,
-      'imagenes': producto.imagenes,
-      'imagen_principal': producto.imagenPrincipal,
+      // 🟢 FIX: imagenPrincipal/imagenes llegan del backend como solo el
+      // nombre del archivo (ej: "6a0e637701fea.jpg"), no como URL completa.
+      // Usamos ApiConfig.imagenProducto() para armar la URL pública real,
+      // igual que ya hacemos en detalles_producto.dart.
+      'imagenes': producto.imagenes
+          .map((filename) => ApiConfig.imagenProducto(filename))
+          .toList(),
+      'imagen_principal': ApiConfig.imagenProducto(producto.imagenPrincipal),
       'categoria': producto.categoria,
       'categoria_id': producto.categoriaId,
       'genero': producto.genero,

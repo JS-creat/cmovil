@@ -65,7 +65,10 @@ class ProductoModel {
       descripcion: json['descripcion'] ?? '',
       precio: toDouble(json['precio'] ?? 0),
       precioAntes: toDouble(
-        json['precio_oferta'] ?? json['precio_antes'] ?? json['precioAntes'],
+        json['precio_oferta'] ??
+            json['precio_antes'] ??
+            json['precioAntes'] ??
+            json['precio_original'],
       ),
       descuento: json['descuento'],
       imagenes: json['imagenes'] != null

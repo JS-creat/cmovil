@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucky/models/auth_model.dart';
 import 'package:lucky/services/auth_service.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 🔥 Importamos la persistencia web
+import 'package:lucky/utils/dio_client.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -32,15 +32,21 @@ class AuthProvider extends ChangeNotifier {
     _isChecking = true;
     notifyListeners();
 
-    // 1. Intentamos recuperar primero el token guardado físicamente en el navegador web
-    final prefs = await SharedPreferences.getInstance();
-    final tokenGuardado = prefs.getString('auth_token');
+    // 🟢 FIX: usamos el mismo mecanismo de storage que AuthService
+    // (clave 'token', vía PrefService), en vez de un storage paralelo
+    // con otra clave ('auth_token') que Dio nunca llegaba a conocer.
+    final tokenGuardado = await _authService.getStoredToken();
 
     if (tokenGuardado != null && tokenGuardado.isNotEmpty) {
       try {
-        // Le inyectamos el token temporal a tu servicio HTTP antes de mandar a llamar al perfil
+        // 🟢 FIX: ahora sí le avisamos a Dio que use este token en el
+        // header Authorization antes de pedir el perfil. Antes esto
+        // nunca se llamaba acá, por lo que getPerfil() salía sin token,
+        // el backend respondía 401 y eso disparaba un logout() que
+        // borraba la sesión que se acababa de recuperar.
+        ApiClient.setAuthToken(tokenGuardado);
         _token = tokenGuardado;
-        
+
         final usuario = await _authService.getPerfil();
 
         if (usuario.id > 0) {
@@ -49,26 +55,8 @@ class AuthProvider extends ChangeNotifier {
           await logout();
         }
       } catch (e) {
-        print("Error recuperando perfil tras recarga: $e");
+        debugPrint('Error recuperando perfil tras recarga: $e');
         await logout();
-      }
-    } else {
-      // Fallback secundario con el método por defecto de tu servicio actual
-      final hasToken = await _authService.isLoggedIn();
-      if (hasToken) {
-        try {
-          final usuario = await _authService.getPerfil();
-          final token = await _authService.getStoredToken();
-
-          if (usuario.id > 0) {
-            _usuario = usuario;
-            _token = token;
-          } else {
-            await logout();
-          }
-        } catch (e) {
-          await logout();
-        }
       }
     }
 
@@ -92,10 +80,8 @@ class AuthProvider extends ChangeNotifier {
 
         _usuario = response.user;
         _token = response.token;
-
-        // 🔥 CORRECCIÓN: Almacenamos el token en la memoria persistente del navegador web
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', response.token!);
+        // El guardado en storage y el ApiClient.setAuthToken() ya los
+        // hace _authService.login() -> _saveToken() internamente.
 
         _isLoading = false;
         notifyListeners();
@@ -130,10 +116,8 @@ class AuthProvider extends ChangeNotifier {
         if (response.token != null) {
           _usuario = response.user;
           _token = response.token;
-
-          // 🔥 CORRECCIÓN: Almacenamos el token al registrar una cuenta nueva
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('auth_token', response.token!);
+          // El guardado en storage y el ApiClient.setAuthToken() ya los
+          // hace _authService.register() -> _saveToken() internamente.
         }
         _isLoading = false;
         notifyListeners();
@@ -235,10 +219,6 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     await _authService.logout();
-    
-    // 🔥 CORRECCIÓN: Al cerrar sesión limpiamos la memoria física
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
 
     _usuario = null;
     _token = null;

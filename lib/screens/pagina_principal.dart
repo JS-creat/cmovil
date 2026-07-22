@@ -11,6 +11,8 @@ import 'package:lucky/services/producto_service.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 import 'package:lucky/providers/carrito_provider.dart';
+import 'package:lucky/providers/favoritos_provider.dart';
+import 'package:lucky/providers/auth_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucky/utils/api_config.dart';
 
@@ -52,6 +54,15 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _cargarBanners();
       _cargarProductos();
+      // 🟢 FIX: cargar favoritos acá también, si no la primera vez que
+      // se entra a la app el corazoncito no sabe qué productos ya son
+      // favoritos (recién se cargaban al entrar a la pestaña Favoritos).
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final favoritosProvider = Provider.of<FavoritosProvider>(
+        context,
+        listen: false,
+      );
+      favoritosProvider.cargarFavoritos(authProvider);
     });
   }
 
@@ -228,7 +239,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                     IconButton(
                       onPressed: () => context.push('/carrito'),
                       icon: const Icon(
-                        Symbols.shopping_bag,
+                        Symbols.shopping_cart,
                         size: 26,
                         color: Colors.black,
                       ),
@@ -609,11 +620,59 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                     'imagen_principal': p.imagenPrincipal,
                   };
 
-                  return ProductoCard(
-                    producto: datosProducto,
-                    onTap: () =>
-                        context.push('/detallesProducto', extra: datosProducto),
-                    mostrarCorazon: true,
+                  // 🟢 FIX: antes no se pasaba esFavorito ni onCorazonTap,
+                  // por eso el corazón nunca reflejaba el estado real ni
+                  // hacía nada al tocarlo. Ahora se consulta a
+                  // FavoritosProvider y se conecta con toggleFavorito().
+                  return Consumer<FavoritosProvider>(
+                    builder: (context, favoritosProvider, _) {
+                      final esFav = favoritosProvider.esFavorito(datosProducto);
+
+                      return ProductoCard(
+                        producto: datosProducto,
+                        onTap: () => context.push(
+                          '/detallesProducto',
+                          extra: datosProducto,
+                        ),
+                        mostrarCorazon: true,
+                        esFavorito: esFav,
+                        onCorazonTap: () async {
+                          final authProvider = Provider.of<AuthProvider>(
+                            context,
+                            listen: false,
+                          );
+
+                          if (!authProvider.isLoggedIn) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Debes iniciar sesión para agregar a favoritos',
+                                ),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            context.go('/cuenta/iniciarSesion');
+                            return;
+                          }
+
+                          final seAgrego = await favoritosProvider
+                              .toggleFavorito(datosProducto, authProvider);
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  seAgrego
+                                      ? 'Agregado a favoritos'
+                                      : 'Eliminado de favoritos',
+                                ),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                      );
+                    },
                   );
                 },
               ),

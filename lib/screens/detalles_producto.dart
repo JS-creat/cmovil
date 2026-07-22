@@ -44,6 +44,17 @@ class _DetallesProductoState extends State<DetallesProducto> {
     return _producto.getColoresPorTalla(_tallaSeleccionada!);
   }
 
+  // 🟢 NUEVO: obtener tallas disponibles para el color seleccionado.
+  // El flujo ahora es: primero se elige color, luego se habilitan las tallas
+  // que sí tienen stock para ese color específico.
+  List<String> _tallasPorColor(String color) {
+    return _producto.variantes
+        .where((v) => v.color == color && v.stock > 0)
+        .map((v) => v.talla)
+        .toSet()
+        .toList();
+  }
+
   // Verificar si la combinación talla/color tiene stock
   bool get _combinacionDisponible {
     if (_tallaSeleccionada == null) return false;
@@ -62,16 +73,10 @@ class _DetallesProductoState extends State<DetallesProducto> {
     // Inicializar el modelo
     _producto = ProductoModel.fromJson(widget.producto);
 
-    // Seleccionar primera talla disponible por defecto
-    if (_producto.tallas.isNotEmpty) {
-      _tallaSeleccionada = _producto.tallas.first;
-
-      // Seleccionar primer color disponible para esa talla
-      final colores = _producto.getColoresPorTalla(_tallaSeleccionada!);
-      if (colores.isNotEmpty) {
-        _colorSeleccionado = colores.first;
-      }
-    }
+    // 🟢 FIX: ya no se preselecciona talla/color automáticamente.
+    // El usuario debe elegir explícitamente ambos antes de poder
+    // agregar al carrito (el botón se mantiene deshabilitado hasta
+    // que _combinacionDisponible sea true).
   }
 
   // GETTER - Incluye imagen principal y galería
@@ -507,23 +512,31 @@ class _DetallesProductoState extends State<DetallesProducto> {
 
                               Wrap(
                                 spacing: 8,
-                                children: _coloresPorTalla.map((colorNombre) {
+                                children: _coloresDisponibles.map((colorNombre) {
                                   bool seleccionado =
                                       colorNombre == _colorSeleccionado;
-                                  bool tieneStock =
-                                      _producto
-                                          .getVariante(
-                                            talla: _tallaSeleccionada ?? '',
-                                            color: colorNombre,
-                                          )
-                                          ?.disponible ??
-                                      false;
+                                  // 🟢 FIX: el color se elige primero, así que su
+                                  // stock se verifica contra CUALQUIER talla, no
+                                  // contra una talla que todavía no existe.
+                                  bool tieneStock = _producto.variantes.any(
+                                    (v) => v.color == colorNombre && v.stock > 0,
+                                  );
 
                                   return GestureDetector(
                                     onTap: tieneStock
                                         ? () {
                                             setState(() {
-                                              _colorSeleccionado = colorNombre;
+                                              if (seleccionado) {
+                                                // 🟢 Toggle: tocar de nuevo deselecciona
+                                                _colorSeleccionado = null;
+                                                _tallaSeleccionada = null;
+                                              } else {
+                                                _colorSeleccionado = colorNombre;
+                                                // Al cambiar de color, se resetea la
+                                                // talla porque puede no ser válida
+                                                // para el nuevo color.
+                                                _tallaSeleccionada = null;
+                                              }
                                             });
                                           }
                                         : null,
@@ -568,31 +581,42 @@ class _DetallesProductoState extends State<DetallesProducto> {
                               ),
                               const SizedBox(height: 12),
 
+                              // 🟢 Aviso mientras no se eligió color todavía
+                              if (_colorSeleccionado == null) ...[
+                                Text(
+                                  'Selecciona un color primero',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+
                               Wrap(
                                 spacing: 8,
                                 children: _tallasDisponibles.map((talla) {
                                   bool seleccionada =
                                       talla == _tallaSeleccionada;
-                                  bool tieneStock = _producto.tieneStockTalla(
-                                    talla,
-                                  );
+                                  // 🟢 FIX: la talla solo se puede tocar si ya
+                                  // hay un color elegido, y su stock se valida
+                                  // específicamente contra ese color.
+                                  bool habilitadaPorColor =
+                                      _colorSeleccionado != null;
+                                  bool tieneStock = habilitadaPorColor &&
+                                      _tallasPorColor(_colorSeleccionado!)
+                                          .contains(talla);
 
                                   return GestureDetector(
                                     onTap: tieneStock
                                         ? () {
                                             setState(() {
-                                              _tallaSeleccionada = talla;
-                                              if (_colorSeleccionado != null) {
-                                                final coloresTalla = _producto
-                                                    .getColoresPorTalla(talla);
-                                                if (!coloresTalla.contains(
-                                                  _colorSeleccionado,
-                                                )) {
-                                                  _colorSeleccionado =
-                                                      coloresTalla.isNotEmpty
-                                                      ? coloresTalla.first
-                                                      : null;
-                                                }
+                                              if (seleccionada) {
+                                                // 🟢 Toggle: tocar de nuevo deselecciona
+                                                _tallaSeleccionada = null;
+                                              } else {
+                                                _tallaSeleccionada = talla;
                                               }
                                             });
                                           }
@@ -630,18 +654,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
                               ),
                               const SizedBox(height: 32),
                             ],
-
-                            if (_producto.stock > 0) ...[
-                              Text(
-                                'Stock disponible: ${_producto.stock} unidades',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.green[700],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
                           ],
                         ),
                       ),
@@ -651,7 +663,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
               ),
             ),
 
-            // ================= BARRA INFERIOR CON BOTONES =================
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,

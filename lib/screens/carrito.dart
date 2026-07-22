@@ -75,13 +75,13 @@ class _CarritoState extends State<Carrito> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Symbols.shopping_bag,
+                            Symbols.shopping_cart,
                             size: 80,
                             color: Colors.grey.shade300,
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Tu bolsa está vacía',
+                            'Tu carrito está vacío',
                             style: TextStyle(
                               fontSize: 18,
                               color: Colors.grey.shade600,
@@ -257,6 +257,17 @@ class _ItemCarritoConCuponesState extends State<_ItemCarritoConCupones> {
         ? (producto['precioAntes'] as num).toDouble()
         : null;
     final int? descuento = producto['descuento'] as int?;
+    // 🟢 FIX: antes se pintaba en rojo y se mostraba tachado siempre que
+    // precioAntes no fuera null, sin importar si realmente había una
+    // oferta. Si precioAntes == precio (o es 0/null), no hay descuento
+    // real, así que no debería verse rojo ni tachado.
+    final bool tieneOferta =
+        precioAntes != null && precioAntes > 0 && precioAntes != precio;
+    // 🟢 FIX: stock disponible para esta variante específica, usado para
+    // deshabilitar el botón "+" cuando ya se alcanzó el límite.
+    final int stockDisponible = producto['stock'] is int
+        ? producto['stock'] as int
+        : (producto['stock'] as num?)?.toInt() ?? 0;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -382,14 +393,16 @@ class _ItemCarritoConCuponesState extends State<_ItemCarritoConCupones> {
                       children: [
                         Text(
                           'S/ ${precio.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: Color(0xFFFF0000),
+                          style: TextStyle(
+                            color: tieneOferta
+                                ? const Color(0xFFFF0000)
+                                : Colors.black,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (descuento != null && descuento > 0)
+                        if (tieneOferta && descuento != null && descuento > 0)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 6,
@@ -413,7 +426,7 @@ class _ItemCarritoConCuponesState extends State<_ItemCarritoConCupones> {
                     const SizedBox(height: 2),
 
                     // Precio anterior
-                    if (precioAntes != null)
+                    if (tieneOferta)
                       Text(
                         'S/ ${precioAntes.toStringAsFixed(2)}',
                         style: TextStyle(
@@ -464,10 +477,31 @@ class _ItemCarritoConCuponesState extends State<_ItemCarritoConCupones> {
                                 ),
                               ),
                               const SizedBox(width: 4),
+                              // 🟢 FIX: el botón "+" ahora se deshabilita
+                              // visualmente al llegar al stock disponible.
                               IconButton(
-                                onPressed: () => carritoProvider
-                                    .incrementarCantidad(context, index),
-                                icon: Icon(Symbols.add, size: 16),
+                                onPressed: cantidad < stockDisponible
+                                    ? () => carritoProvider
+                                          .incrementarCantidad(context, index)
+                                    : () {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'No hay más stock disponible',
+                                            ),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                      },
+                                icon: Icon(
+                                  Symbols.add,
+                                  size: 16,
+                                  color: cantidad < stockDisponible
+                                      ? Colors.black
+                                      : Colors.grey,
+                                ),
                                 padding: const EdgeInsets.all(4),
                                 constraints: const BoxConstraints(),
                               ),

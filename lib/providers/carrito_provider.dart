@@ -108,12 +108,24 @@ class CarritoProvider with ChangeNotifier {
 
     final item = _carrito!.items[index];
 
+    // 🟢 FIX: no permitir incrementar más allá del stock disponible
+    // para esa variante (talla/color) específica. Antes esto llamaba
+    // directo a actualizarCantidad sin ningún tope, por lo que la
+    // cantidad podía superar el stock real.
+    final stockDisponible = item.variante.stock;
+    if (item.cantidad >= stockDisponible) {
+      _error = 'No hay más stock disponible para este producto';
+      notifyListeners();
+      return;
+    }
+
     try {
       _carrito = await _service.actualizarCantidad(
         idUsuario: idUsuario,
         idDetalleCarrito: item.idDetalle,
         cantidad: item.cantidad + 1,
       );
+      _error = null;
       notifyListeners();
     } catch (e) {
       _error = e.toString();
