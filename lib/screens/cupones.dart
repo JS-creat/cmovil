@@ -1,9 +1,10 @@
-// screens/cupones.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lucky/providers/carrito_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:lucky/providers/carrito_provider.dart';
+import 'package:lucky/providers/cupon_provider.dart';
+import 'package:lucky/models/Cupon_model.dart';
 
 class Cupones extends StatefulWidget {
   const Cupones({super.key});
@@ -13,6 +14,15 @@ class Cupones extends StatefulWidget {
 }
 
 class _CuponesState extends State<Cupones> {
+  @override
+  void initState() {
+    super.initState();
+    // Cargar cupones al entrar a la pantalla
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CuponProvider>().cargarCupones();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -54,7 +64,6 @@ class _CuponesState extends State<Cupones> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        // Icono de carrito con Consumer
                         Consumer<CarritoProvider>(
                           builder: (context, carritoProvider, child) {
                             final cantidadTotal = carritoProvider.cantidadTotal;
@@ -62,19 +71,17 @@ class _CuponesState extends State<Cupones> {
                               clipBehavior: Clip.none,
                               children: [
                                 IconButton(
-                                  onPressed: () {
-                                    context.go('/carrito');
-                                  },
+                                  onPressed: () => context.go('/carrito'),
                                   icon: const Icon(
-                                    Symbols.shopping_bag,
+                                    Symbols.shopping_cart,
                                     size: 28,
                                     color: Colors.black,
                                   ),
                                 ),
                                 if (cantidadTotal > 0)
                                   Positioned(
-                                    right: 2, // 👈 MÁS A LA IZQUIERDA (era 0)
-                                    top: 4, // 👈 MÁS ABAJO (era 0)
+                                    right: 2,
+                                    top: 4,
                                     child: Container(
                                       width: 16,
                                       height: 16,
@@ -109,55 +116,106 @@ class _CuponesState extends State<Cupones> {
               ),
             ),
 
-            // ================= CONTENIDO PRINCIPAL =================
+            // ================= CONTENIDO DINÁMICO =================
             Expanded(
               child: Container(
                 color: const Color(0xFFF7F7F7),
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8, bottom: 12),
-                      child: Text(
-                        'Tus cupones disponibles',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                child: Consumer<CuponProvider>(
+                  builder: (context, cuponProvider, _) {
+                    // Loading
+                    if (cuponProvider.isLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    // Error
+                    if (cuponProvider.error != null) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 48,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No se pudieron cargar los cupones',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                cuponProvider.error!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () => cuponProvider.cargarCupones(),
+                                child: const Text('Reintentar'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    }
 
-                    _CuponCard(
-                      icono: Symbols.confirmation_number,
-                      titulo: 'Cupón de S/ 50',
-                      descripcion:
-                          'Cupón con valor de S/ 50 de descuento en prendas de mujer.',
-                      fechaVencimiento: 'Vence: 30 días',
-                      colorFondo: const Color(0xFFFFF0F0),
-                    ),
+                    // Lista vacía
+                    if (cuponProvider.cupones.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Symbols.local_offer,
+                                size: 48,
+                                color: Colors.grey.shade300,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No hay cupones disponibles',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Vuelve pronto para ver nuevas promociones',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
 
-                    const SizedBox(height: 12),
-
-                    _CuponCard(
-                      icono: Symbols.confirmation_number,
-                      titulo: 'Cupón de S/ 20',
-                      descripcion:
-                          'Cupón con valor de S/ 20 de descuento en cualquier prenda de la tienda.',
-                      fechaVencimiento: 'Vence: 30 días',
-                      colorFondo: const Color(0xFFF0F7FF),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    _CuponCard(
-                      icono: Symbols.percent,
-                      titulo: 'Cupón 30% OFF',
-                      descripcion:
-                          'Cupón de 30% de descuento en cualquier polera de la tienda.',
-                      fechaVencimiento: 'Vence: 7 días',
-                      colorFondo: const Color(0xFFF0FFF0),
-                    ),
-                  ],
+                    // Lista real de cupones
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: cuponProvider.cupones.length,
+                      itemBuilder: (context, index) {
+                        final cupon = cuponProvider.cupones[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _CuponCardReal(cupon: cupon),
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
             ),
@@ -168,21 +226,31 @@ class _CuponesState extends State<Cupones> {
   }
 }
 
-// Widget para cada tarjeta de cupón
-class _CuponCard extends StatelessWidget {
-  final IconData icono;
-  final String titulo;
-  final String descripcion;
-  final String fechaVencimiento;
-  final Color colorFondo;
+// ================= TARJETA DE CUPÓN REAL (desde API) =================
+class _CuponCardReal extends StatelessWidget {
+  final CuponModel cupon;
 
-  const _CuponCard({
-    required this.icono,
-    required this.titulo,
-    required this.descripcion,
-    required this.fechaVencimiento,
-    required this.colorFondo,
-  });
+  const _CuponCardReal({required this.cupon});
+
+  Color get _colorFondo {
+    if (cupon.tipoDescuento == 'porcentaje') {
+      return const Color(0xFFF0FFF0); // verde claro
+    }
+    return const Color(0xFFFFF0F0); // rojo claro
+  }
+
+  IconData get _icono {
+    if (cupon.tipoDescuento == 'porcentaje') {
+      return Symbols.percent;
+    }
+    return Symbols.confirmation_number;
+  }
+
+  String get _vencimientoTexto {
+    if (cupon.diasRestantes <= 0) return 'Vence hoy';
+    if (cupon.diasRestantes == 1) return 'Vence mañana';
+    return 'Vence: ${cupon.diasRestantes} días';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -217,33 +285,47 @@ class _CuponCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: colorFondo,
+                    color: _colorFondo,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icono, color: const Color(0xFFFF0000), size: 24),
+                  child: Icon(_icono, color: const Color(0xFFFF0000), size: 24),
                 ),
                 const SizedBox(width: 16),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Código del cupón en negrita
                       Text(
-                        titulo,
+                        cupon.codigo,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
+                      // Descripción
                       Text(
-                        descripcion,
+                        cupon.descripcion.isNotEmpty
+                            ? cupon.descripcion
+                            : 'Descuento ${cupon.descuentoFormateado}',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade700,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      // Descuento formateado
+                      Text(
+                        cupon.descuentoFormateado,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFED8B00),
+                        ),
+                      ),
                       const SizedBox(height: 8),
+                      // Vencimiento
                       Row(
                         children: [
                           Icon(
@@ -253,14 +335,27 @@ class _CuponCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            fechaVencimiento,
+                            _vencimientoTexto,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade600,
+                              color: cupon.diasRestantes <= 3
+                                  ? Colors.orange
+                                  : Colors.grey.shade600,
                             ),
                           ),
                         ],
                       ),
+                      if (cupon.montoCompraMinima > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Compra mínima: S/ ${cupon.montoCompraMinima.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),

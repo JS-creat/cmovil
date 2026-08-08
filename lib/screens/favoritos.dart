@@ -67,7 +67,7 @@ class _FavoritosState extends State<Favoritos> {
                                     context.go('/carrito');
                                   },
                                   icon: const Icon(
-                                    Symbols.shopping_bag,
+                                    Symbols.shopping_cart,
                                     size: 28,
                                     color: Colors.black,
                                   ),

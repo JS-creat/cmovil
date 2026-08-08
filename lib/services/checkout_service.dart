@@ -19,6 +19,10 @@ class CheckoutService {
     required String telefono,
     required int idTipoEntrega,
     int? idDistrito,
+    // 🟢 NUEVO: código de cupón opcional. El backend recalcula el
+    // descuento por su cuenta (no confía en montos calculados en el
+    // cliente), así que solo mandamos el código, nada más.
+    String? codigoCupon,
   }) async {
     try {
       await _ensureToken();
@@ -31,6 +35,8 @@ class CheckoutService {
           'telefono': telefono,
           'id_tipo_entrega': idTipoEntrega,
           'id_distrito': idTipoEntrega == 2 ? idDistrito : null,
+          if (codigoCupon != null && codigoCupon.trim().isNotEmpty)
+            'codigo_cupon': codigoCupon.trim(),
         },
       );
 

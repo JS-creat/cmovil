@@ -25,6 +25,10 @@ class _DetallesProductoState extends State<DetallesProducto> {
   int _paginaActual = 0;
   final PageController _pageController = PageController();
 
+  // 🟢 NUEVO: evita que el usuario toque "Añadir al carrito" varias
+  // veces mientras la petición anterior sigue en curso.
+  bool _agregandoAlCarrito = false;
+
   // Convertir el Map a ProductoModel para facilitar el acceso
   late ProductoModel _producto;
   VarianteModel? _varianteSeleccionada;
@@ -44,9 +48,7 @@ class _DetallesProductoState extends State<DetallesProducto> {
     return _producto.getColoresPorTalla(_tallaSeleccionada!);
   }
 
-  // 🟢 NUEVO: obtener tallas disponibles para el color seleccionado.
-  // El flujo ahora es: primero se elige color, luego se habilitan las tallas
-  // que sí tienen stock para ese color específico.
+  // Obtener tallas disponibles para el color seleccionado.
   List<String> _tallasPorColor(String color) {
     return _producto.variantes
         .where((v) => v.color == color && v.stock > 0)
@@ -70,23 +72,13 @@ class _DetallesProductoState extends State<DetallesProducto> {
   @override
   void initState() {
     super.initState();
-    // Inicializar el modelo
     _producto = ProductoModel.fromJson(widget.producto);
-
-    // 🟢 FIX: ya no se preselecciona talla/color automáticamente.
-    // El usuario debe elegir explícitamente ambos antes de poder
-    // agregar al carrito (el botón se mantiene deshabilitado hasta
-    // que _combinacionDisponible sea true).
   }
 
   // GETTER - Incluye imagen principal y galería
   List<String> get imagenesProducto {
     List<String> todasLasImagenes = [];
 
-    // 1. Agregar imagen principal (si existe)
-    // 🟢 FIX: imagenPrincipal llega como solo el nombre del archivo
-    // (ej: "6a0e637701fea.jpg"), no como URL completa. Usamos el helper
-    // ApiConfig.imagenProducto() que arma correctamente la URL pública.
     if (_producto.imagenPrincipal.isNotEmpty) {
       String imgPrincipal = ApiConfig.imagenProducto(_producto.imagenPrincipal);
       if (imgPrincipal.isNotEmpty) {
@@ -94,7 +86,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
       }
     }
 
-    // 2. Agregar imágenes de galería (sin duplicar la principal)
     for (var filename in _producto.imagenes) {
       String urlTransformada = ApiConfig.imagenProducto(filename);
       if (urlTransformada.isNotEmpty &&
@@ -106,7 +97,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
     return todasLasImagenes;
   }
 
-  // TRANSFORMAR IMAGEN PRINCIPAL (por si se usa)
   String get imagenPrincipalTransformada {
     return ApiConfig.imagenProducto(_producto.imagenPrincipal);
   }
@@ -176,6 +166,55 @@ class _DetallesProductoState extends State<DetallesProducto> {
     });
   }
 
+  // 🟢 NUEVO: mismo estilo de overlay pero para mostrar un error real,
+  // en vez de fallar en silencio como pasaba antes.
+  void _mostrarMensajeError(BuildContext context, String mensaje) {
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            color: const Color(0xFFED1C24),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Color(0xFFED1C24),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    mensaje,
+                    style: const TextStyle(fontSize: 14, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+    Future.delayed(const Duration(seconds: 3), () {
+      overlayEntry.remove();
+    });
+  }
+
   // Método para verificar si el usuario está logueado
   void _verificarUsuarioYAgregarCarrito(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -194,7 +233,17 @@ class _DetallesProductoState extends State<DetallesProducto> {
     _agregarAlCarrito(context);
   }
 
-  void _agregarAlCarrito(BuildContext context) {
+  // 🟢 FIX: ahora es async y espera (await) la respuesta real del
+  // backend antes de mostrar cualquier mensaje. Antes se llamaba a
+  // agregarProducto() sin await, así que el mensaje verde "Agregado al
+  // carrito" aparecía siempre, sin importar si la petición realmente
+  // tuvo éxito — en el celular (con latencia de red real, a diferencia
+  // de localhost en la compu) esto hacía que el número del carrito
+  // quedara desactualizado en silencio cuando la petición fallaba o
+  // demoraba más de lo esperado.
+  Future<void> _agregarAlCarrito(BuildContext context) async {
+    if (_agregandoAlCarrito) return;
+
     final carritoProvider = Provider.of<CarritoProvider>(
       context,
       listen: false,
@@ -216,8 +265,25 @@ class _DetallesProductoState extends State<DetallesProducto> {
       'cantidad': 1,
     };
 
-    carritoProvider.agregarProducto(context, productoCarrito);
-    _mostrarMensajeConfirmacion(context);
+    setState(() => _agregandoAlCarrito = true);
+
+    await carritoProvider.agregarProducto(context, productoCarrito);
+
+    if (!mounted) return;
+
+    setState(() => _agregandoAlCarrito = false);
+
+    // CarritoProvider ya guarda el error (si lo hubo) en su propiedad
+    // `error` tras el intento — la revisamos para saber si de verdad
+    // funcionó antes de felicitar al usuario por algo que no pasó.
+    if (carritoProvider.error != null) {
+      _mostrarMensajeError(
+        context,
+        carritoProvider.error!.replaceFirst('Exception: ', ''),
+      );
+    } else {
+      _mostrarMensajeConfirmacion(context);
+    }
   }
 
   @override
@@ -226,8 +292,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
     final precioAntesValor = _producto.precioAntes;
     bool tienePrecioAnterior =
         precioAntesValor != null && precioAntesValor > 0;
-    // El precio principal solo va en rojo si hay descuento/precio anterior real,
-    // si no, se ve negro-negrita igual que en la tarjeta del catálogo.
     final Color colorPrecioPrincipal =
         tienePrecioAnterior ? const Color(0xFFED1C24) : Colors.black;
 
@@ -270,7 +334,7 @@ class _DetallesProductoState extends State<DetallesProducto> {
                                     context.push('/carrito');
                                   },
                                   icon: const Icon(
-                                    Symbols.shopping_bag,
+                                    Symbols.shopping_cart,
                                     size: 28,
                                     color: Colors.black,
                                   ),
@@ -515,9 +579,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
                                 children: _coloresDisponibles.map((colorNombre) {
                                   bool seleccionado =
                                       colorNombre == _colorSeleccionado;
-                                  // 🟢 FIX: el color se elige primero, así que su
-                                  // stock se verifica contra CUALQUIER talla, no
-                                  // contra una talla que todavía no existe.
                                   bool tieneStock = _producto.variantes.any(
                                     (v) => v.color == colorNombre && v.stock > 0,
                                   );
@@ -527,14 +588,10 @@ class _DetallesProductoState extends State<DetallesProducto> {
                                         ? () {
                                             setState(() {
                                               if (seleccionado) {
-                                                // 🟢 Toggle: tocar de nuevo deselecciona
                                                 _colorSeleccionado = null;
                                                 _tallaSeleccionada = null;
                                               } else {
                                                 _colorSeleccionado = colorNombre;
-                                                // Al cambiar de color, se resetea la
-                                                // talla porque puede no ser válida
-                                                // para el nuevo color.
                                                 _tallaSeleccionada = null;
                                               }
                                             });
@@ -581,7 +638,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
                               ),
                               const SizedBox(height: 12),
 
-                              // 🟢 Aviso mientras no se eligió color todavía
                               if (_colorSeleccionado == null) ...[
                                 Text(
                                   'Selecciona un color primero',
@@ -599,9 +655,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
                                 children: _tallasDisponibles.map((talla) {
                                   bool seleccionada =
                                       talla == _tallaSeleccionada;
-                                  // 🟢 FIX: la talla solo se puede tocar si ya
-                                  // hay un color elegido, y su stock se valida
-                                  // específicamente contra ese color.
                                   bool habilitadaPorColor =
                                       _colorSeleccionado != null;
                                   bool tieneStock = habilitadaPorColor &&
@@ -613,7 +666,6 @@ class _DetallesProductoState extends State<DetallesProducto> {
                                         ? () {
                                             setState(() {
                                               if (seleccionada) {
-                                                // 🟢 Toggle: tocar de nuevo deselecciona
                                                 _tallaSeleccionada = null;
                                               } else {
                                                 _tallaSeleccionada = talla;
@@ -673,7 +725,7 @@ class _DetallesProductoState extends State<DetallesProducto> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  // Botón "A favoritos"
+                  // Botón "Agregar a favoritos"
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
@@ -748,10 +800,10 @@ class _DetallesProductoState extends State<DetallesProducto> {
 
                   const SizedBox(width: 16),
 
-                  // Botón "Al carrito"
+                  // Botón "Añadir al carrito"
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _combinacionDisponible
+                      onPressed: (_combinacionDisponible && !_agregandoAlCarrito)
                           ? () => _verificarUsuarioYAgregarCarrito(context)
                           : null,
                       style: ElevatedButton.styleFrom(
@@ -765,21 +817,34 @@ class _DetallesProductoState extends State<DetallesProducto> {
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Symbols.shopping_bag,
-                            size: 20,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _combinacionDisponible ? 'Añadir al carrito' : 'Sin stock',
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                        ],
-                      ),
+                      child: _agregandoAlCarrito
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Symbols.shopping_cart,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _combinacionDisponible
+                                      ? 'Añadir al carrito'
+                                      : 'Sin stock',
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
                     ),
                   ),
                 ],

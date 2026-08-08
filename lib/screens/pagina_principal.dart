@@ -54,15 +54,27 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _cargarBanners();
       _cargarProductos();
-      // 🟢 FIX: cargar favoritos acá también, si no la primera vez que
-      // se entra a la app el corazoncito no sabe qué productos ya son
-      // favoritos (recién se cargaban al entrar a la pestaña Favoritos).
+
+      // 🟢 FIX: cargar favoritos al iniciar
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final favoritosProvider = Provider.of<FavoritosProvider>(
         context,
         listen: false,
       );
       favoritosProvider.cargarFavoritos(authProvider);
+
+      // 🟢 NUEVO FIX: el carrito nunca se cargaba al iniciar la app —
+      // CarritoProvider._carrito arrancaba en null (cantidadTotal = 0),
+      // y recién se llenaba con la respuesta completa del backend
+      // después de la PRIMERA acción (agregar/actualizar/eliminar un
+      // producto). Por eso el badge del carrito aparecía vacío al abrir
+      // la app, y de golpe mostraba el total real recién al agregar
+      // algo nuevo. Ahora se carga explícitamente desde el inicio.
+      final carritoProvider = Provider.of<CarritoProvider>(
+        context,
+        listen: false,
+      );
+      carritoProvider.cargarCarrito(context);
     });
   }
 
@@ -167,12 +179,10 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ─── MEJORA: fondo ligeramente más cálido para el body ───
       backgroundColor: const Color(0xFFF8F8F8),
       body: SafeArea(
         child: Column(
           children: [
-            // ─── Header ───
             Container(
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -194,16 +204,11 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Column(
                         children: [
-                          // ─── Sección Recomendados ───
-                          // Trae productos ordenados por score de recomendación
-                          // (más recientes / mejor valorados para el usuario)
                           _buildSeccionProductos(
                             titulo: 'Recomendado para ti',
                             future: _recomendadosFuture,
                             productos: _recomendados,
                           ),
-                          // ─── Sección Populares ───
-                          // Trae productos ordenados por ventas o visitas
                           _buildSeccionProductos(
                             titulo: 'Los más populares',
                             future: _popularesFuture,
@@ -274,7 +279,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               ],
             ),
             const SizedBox(height: 12),
-            // ─── Barra de búsqueda ───
             GestureDetector(
               onTap: () => context.go('/busqueda'),
               child: Container(
@@ -308,7 +312,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     );
   }
 
-  // ─── Géneros / Filtros ───
   Widget _generosList() {
     return FutureBuilder<List<GeneroModel>>(
       future: _generosFuture,
@@ -370,7 +373,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
             seleccionado = !_modoPromociones && _generoSeleccionado == id;
           }
 
-          // ─── MEJORA: chip con ícono de fuego para Promociones ───
           final bool esPromocion = nombre == 'Promociones';
 
           return GestureDetector(
@@ -446,7 +448,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     );
   }
 
-  // ─── Banner Carrusel ───
   Widget _bannerCarrusel() {
     if (banners.isEmpty) return _bannerSkeleton();
 
@@ -491,7 +492,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 );
               },
             ),
-            // ─── Indicadores de página ───
             Positioned(
               bottom: 10,
               left: 0,
@@ -531,7 +531,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     );
   }
 
-  // ─── Sección de productos (Recomendados / Populares) ───
   Widget _buildSeccionProductos({
     required String titulo,
     required Future<List<ProductoModel>> future,
@@ -550,7 +549,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Encabezado de sección ───
             Padding(
               padding: const EdgeInsets.only(top: 24, bottom: 14),
               child: Row(
@@ -602,8 +600,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ],
               ),
             ),
-            // ─── CORRECCIÓN: SizedBox con altura suficiente para ProductoCard ───
-            // Si ProductoCard sigue desbordando, aumenta _alturaCard
             SizedBox(
               height: _alturaCard,
               child: ListView.separated(
@@ -620,10 +616,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                     'imagen_principal': p.imagenPrincipal,
                   };
 
-                  // 🟢 FIX: antes no se pasaba esFavorito ni onCorazonTap,
-                  // por eso el corazón nunca reflejaba el estado real ni
-                  // hacía nada al tocarlo. Ahora se consulta a
-                  // FavoritosProvider y se conecta con toggleFavorito().
                   return Consumer<FavoritosProvider>(
                     builder: (context, favoritosProvider, _) {
                       final esFav = favoritosProvider.esFavorito(datosProducto);
@@ -683,7 +675,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     );
   }
 
-  // ─── Estado de carga (skeleton) ───
   Widget _buildSeccionCargando(String titulo) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -734,7 +725,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     );
   }
 
-  // ─── MEJORA: Skeleton animado para las cards ───
   Widget _skeletonCard() {
     return Container(
       width: 160,
@@ -746,7 +736,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Imagen placeholder
           Container(
             height: 190,
             decoration: BoxDecoration(

@@ -113,7 +113,7 @@ class _MisPedidosState extends State<MisPedidos> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Symbols.shopping_bag,
+                    Symbols.shopping_cart,
                     size: 80,
                     color: Colors.grey.shade300,
                   ),

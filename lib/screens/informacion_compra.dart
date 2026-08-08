@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:lucky/providers/carrito_provider.dart';
 import 'package:lucky/models/ubicacion_item.dart';
 import 'package:lucky/services/ubicacion_service.dart';
+import 'package:lucky/services/cupon_service.dart';
+import 'package:lucky/models/Cupon_model.dart';
 
 class InformacionCompra extends StatefulWidget {
   const InformacionCompra({super.key});
@@ -18,6 +20,7 @@ class _InformacionCompraState extends State<InformacionCompra> {
       TextEditingController();
   final TextEditingController _telefonoController = TextEditingController();
   final UbicacionService _ubicacionService = UbicacionService();
+  final CuponService _cuponService = CuponService();
 
   List<UbicacionItem> _tiposDocumento = [];
   List<UbicacionItem> _departamentos = [];
@@ -34,6 +37,27 @@ class _InformacionCompraState extends State<InformacionCompra> {
   String? _nombreAgencia, _direccionAgencia, _tiempoEstimadoEnvio;
   bool _isLoading = true;
   bool _calculandoEnvio = false;
+
+  // 🟢 NUEVO: estado del cupón de descuento — ahora se elige de una
+  // lista de cupones REALMENTE disponibles para el usuario, en vez de
+  // escribir un código a mano.
+  List<CuponModel> _cuponesDisponibles = [];
+  bool _validandoCupon = false;
+  String? _errorCupon;
+  String? _cuponSeleccionadoCodigo;
+  String? _cuponAplicadoCodigo;
+  double? _cuponDescuentoAplicado;
+
+  // 🟢 NUEVO: solo se muestran los cupones que YA cumplen el monto
+  // mínimo con el carrito actual. Si no alcanza, el cupón simplemente
+  // no aparece en la lista (en vez de mostrarse y luego rechazar la
+  // selección con un error).
+  List<CuponModel> _cuponesElegibles(BuildContext context) {
+    final total = Provider.of<CarritoProvider>(context, listen: false).total;
+    return _cuponesDisponibles
+        .where((c) => c.montoCompraMinima <= total)
+        .toList();
+  }
 
   @override
   void initState() {
@@ -58,9 +82,30 @@ class _InformacionCompraState extends State<InformacionCompra> {
   }
 
   Future<void> _cargarDatosIniciales() async {
-    await Future.wait([_cargarTiposDocumento(), _cargarDepartamentos()]);
+    await Future.wait([
+      _cargarTiposDocumento(),
+      _cargarDepartamentos(),
+      _cargarCuponesDisponibles(),
+    ]);
     _cargarDatosUsuario();
     setState(() => _isLoading = false);
+  }
+
+  // 🟢 NUEVO: trae solo los cupones a los que el usuario tiene acceso
+  // (mismo endpoint que usa la pestaña "Cupones"). Si falla o viene
+  // vacía, simplemente no se muestra la sección — no es un error crítico
+  // que deba bloquear el checkout.
+  Future<void> _cargarCuponesDisponibles() async {
+    try {
+      final cupones = await _cuponService.obtenerDisponibles();
+      if (mounted) {
+        setState(() => _cuponesDisponibles = cupones);
+      }
+    } catch (e) {
+      // Silencioso a propósito: no tener cupones disponibles no debería
+      // impedir continuar con la compra.
+      _cuponesDisponibles = [];
+    }
   }
 
   Future<void> _cargarDatosUsuario() async {
@@ -148,6 +193,59 @@ class _InformacionCompraState extends State<InformacionCompra> {
     }
   }
 
+  // 🟢 CAMBIADO: ahora recibe el cupón elegido de la lista de
+  // disponibles (no un código escrito a mano) y lo valida contra el
+  // monto actual del carrito.
+  Future<void> _seleccionarCupon(CuponModel cupon) async {
+    // Tocar de nuevo el mismo cupón lo deselecciona
+    if (_cuponSeleccionadoCodigo == cupon.codigo) {
+      _quitarCupon();
+      return;
+    }
+
+    final carritoProvider = Provider.of<CarritoProvider>(
+      context,
+      listen: false,
+    );
+
+    setState(() {
+      _cuponSeleccionadoCodigo = cupon.codigo;
+      _validandoCupon = true;
+      _errorCupon = null;
+    });
+
+    try {
+      final resultado = await _cuponService.validarCupon(
+        codigo: cupon.codigo,
+        montoCarrito: carritoProvider.total,
+      );
+
+      setState(() {
+        _cuponAplicadoCodigo = resultado['codigo'] ?? cupon.codigo;
+        _cuponDescuentoAplicado =
+            (resultado['descuento_aplicado'] as num?)?.toDouble() ?? 0.0;
+        _validandoCupon = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorCupon = e.toString().replaceFirst('Exception: ', '');
+        _cuponSeleccionadoCodigo = null;
+        _cuponAplicadoCodigo = null;
+        _cuponDescuentoAplicado = null;
+        _validandoCupon = false;
+      });
+    }
+  }
+
+  void _quitarCupon() {
+    setState(() {
+      _cuponSeleccionadoCodigo = null;
+      _cuponAplicadoCodigo = null;
+      _cuponDescuentoAplicado = null;
+      _errorCupon = null;
+    });
+  }
+
   void _mostrarError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -189,6 +287,10 @@ class _InformacionCompraState extends State<InformacionCompra> {
         'nombreAgencia': _nombreAgencia,
         'direccionAgencia': _direccionAgencia,
         'tiempoEstimadoEnvio': _tiempoEstimadoEnvio,
+        // 🟢 NUEVO: se lleva el código y el descuento (este último solo
+        // para MOSTRAR en el resumen; el backend lo recalcula al confirmar)
+        'codigoCupon': _cuponAplicadoCodigo,
+        'montoDescuentoCupon': _cuponDescuentoAplicado,
       },
     );
   }
@@ -342,6 +444,27 @@ class _InformacionCompraState extends State<InformacionCompra> {
                                   ],
                                 ),
                               ],
+                              if (!_calculandoEnvio &&
+                                  _nombreAgencia != null) ...[
+                                const SizedBox(height: 20),
+                                _buildAgenciaCard(),
+                              ],
+                            ],
+                            // 🟢 FIX: la sección completa (título + lista)
+                            // solo aparece si hay al menos un cupón que
+                            // YA cumple el monto mínimo con el carrito
+                            // actual (no solo "disponible en general").
+                            if (_cuponesElegibles(context).isNotEmpty) ...[
+                              const SizedBox(height: 32),
+                              const Text(
+                                'Cupones disponibles',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _buildCuponSection(),
                             ],
                           ],
                         ),
@@ -360,6 +483,30 @@ class _InformacionCompraState extends State<InformacionCompra> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
+                    if (_cuponDescuentoAplicado != null &&
+                        _cuponDescuentoAplicado! > 0) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Descuento ($_cuponAplicadoCodigo):',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                          Text(
+                            '- S/ ${_cuponDescuentoAplicado!.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -371,14 +518,20 @@ class _InformacionCompraState extends State<InformacionCompra> {
                           ),
                         ),
                         Consumer<CarritoProvider>(
-                          builder: (ctx, cp, _) => Text(
-                            'S/ ${(cp.total + (_costoEnvioCalculado ?? 0)).toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
+                          builder: (ctx, cp, _) {
+                            final descuento = _cuponDescuentoAplicado ?? 0;
+                            final total =
+                                (cp.total - descuento).clamp(0, double.infinity) +
+                                    (_costoEnvioCalculado ?? 0);
+                            return Text(
+                              'S/ ${total.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -483,6 +636,242 @@ class _InformacionCompraState extends State<InformacionCompra> {
       ),
     ],
   );
+
+  Widget _buildAgenciaCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            margin: const EdgeInsets.only(top: 2),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.black,
+            ),
+            child: const Center(
+              child: Icon(Icons.check, size: 14, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _nombreAgencia ?? '',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (_direccionAgencia != null &&
+                    _direccionAgencia!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _direccionAgencia!,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                ],
+                if (_tiempoEstimadoEnvio != null &&
+                    _tiempoEstimadoEnvio!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Tiempo estimado: $_tiempoEstimadoEnvio',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Text(
+            'S/ ${(_costoEnvioCalculado ?? 0).toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFED1C24),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🟢 CAMBIADO: en vez de un campo de texto libre, se muestra una lista
+  // de chips con SOLO los cupones a los que el usuario tiene acceso
+  // (mismos datos que la pestaña "Cupones"). Tocar un chip lo aplica;
+  // tocarlo de nuevo lo quita.
+  Widget _buildCuponSection() {
+    final cuponesElegibles = _cuponesElegibles(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 🟢 CAMBIADO: de Wrap de chips compactos a filas anchas
+        // (una por línea), con "Aplicar" visible dentro de cada una.
+        for (final cupon in cuponesElegibles) ...[
+          _buildCuponRow(cupon),
+          const SizedBox(height: 10),
+        ],
+        if (_cuponAplicadoCodigo != null && !_validandoCupon) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.check_circle, size: 16, color: Colors.green),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Cupón $_cuponAplicadoCodigo aplicado: -S/ ${_cuponDescuentoAplicado!.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (_errorCupon != null) ...[
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline, size: 16, color: Colors.red),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _errorCupon!,
+                  style: const TextStyle(fontSize: 13, color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  // 🟢 NUEVO: fila ancha para un cupón individual. Cuando no está
+  // seleccionado, muestra la palabra "Aplicar" como llamado a la acción
+  // dentro de la misma fila (a la derecha). Cuando está seleccionado,
+  // ese espacio pasa a mostrar un check verde en su lugar.
+  Widget _buildCuponRow(CuponModel cupon) {
+    final bool seleccionado = _cuponSeleccionadoCodigo == cupon.codigo;
+    final bool deshabilitado = _validandoCupon && !seleccionado;
+
+    return GestureDetector(
+      onTap: _validandoCupon ? null : () => _seleccionarCupon(cupon),
+      child: Opacity(
+        opacity: deshabilitado ? 0.5 : 1,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: seleccionado ? Colors.green.shade50 : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: seleccionado
+                  ? Colors.green.shade400
+                  : Colors.grey.shade300,
+              width: seleccionado ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cupon.descuentoFormateado,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: seleccionado
+                            ? Colors.green.shade700
+                            : Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      cupon.codigo,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    if (cupon.descripcion.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        cupon.descripcion,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              if (_validandoCupon && seleccionado)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (seleccionado)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.check_circle, size: 20, color: Colors.green),
+                    SizedBox(width: 4),
+                    Text(
+                      'Aplicado',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Aplicar',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildRadioOption(String title, int value) => InkWell(
     onTap: () => setState(() {

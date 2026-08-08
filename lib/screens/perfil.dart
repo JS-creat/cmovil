@@ -97,7 +97,7 @@ class Perfil extends StatelessWidget {
                       },
                     ),
                     _buildMenuItem(
-                      icon: Symbols.shopping_bag,
+                      icon: Symbols.shopping_cart,
                       title: 'Mis compras',
                       onTap: () {
                         context.push('/mis-pedidos'); // <-- ACTUALIZADO

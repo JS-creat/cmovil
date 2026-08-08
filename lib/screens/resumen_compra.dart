@@ -33,6 +33,15 @@ class _ResumenCompraState extends State<ResumenCompra> {
     return widget.data['tiempoEstimadoEnvio'] as String?;
   }
 
+  // 🟢 NUEVO: código y descuento del cupón (llegan de informacion_compra)
+  String? _obtenerCodigoCupon() {
+    return widget.data['codigoCupon'] as String?;
+  }
+
+  double _obtenerDescuentoCupon() {
+    return widget.data['montoDescuentoCupon'] as double? ?? 0.0;
+  }
+
   Future<void> _confirmarPedido() async {
     if (_procesando) return;
 
@@ -49,6 +58,9 @@ class _ResumenCompraState extends State<ResumenCompra> {
         telefono: data['telefono'],
         idTipoEntrega: data['idTipoEntrega'],
         idDistrito: data['idTipoEntrega'] == 2 ? data['idDistrito'] : null,
+        // 🟢 NUEVO: el backend recalcula el descuento por su cuenta a
+        // partir del código, no confiamos en el monto ya mostrado en UI.
+        codigoCupon: _obtenerCodigoCupon(),
       );
 
       if (!mounted) return;
@@ -108,9 +120,12 @@ class _ResumenCompraState extends State<ResumenCompra> {
     final nombreAgencia = _obtenerNombreAgencia();
     final direccionAgencia = _obtenerDireccionAgencia();
     final tiempoEstimado = _obtenerTiempoEstimado();
+    final codigoCupon = _obtenerCodigoCupon();
+    final descuentoCupon = _obtenerDescuentoCupon();
 
     final subtotal = carritoProvider.total;
-    final totalFinal = subtotal + costoEnvio;
+    final totalFinal =
+        (subtotal - descuentoCupon).clamp(0, double.infinity) + costoEnvio;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -227,50 +242,90 @@ class _ResumenCompraState extends State<ResumenCompra> {
 
                       const SizedBox(height: 28),
 
-                      const Text(
-                        'Resumen de pedido',
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text(
+                            'Resumen del pedido',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${productos.length} producto${productos.length == 1 ? '' : 's'}',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
                         ),
                       ),
                       const SizedBox(height: 16),
 
                       _infoCard(
+                        padding: const EdgeInsets.all(16),
                         children: [
-                          // Productos
                           ...productos.map((producto) {
-                            final nombre = producto['titulo'] ?? 'Producto';
-
-                            final cantidad =
-                                int.tryParse(
-                                  (producto['cantidad'] ?? 1).toString(),
-                                ) ??
-                                1;
-
-                            final precio =
-                                double.tryParse(
-                                  (producto['precio'] ?? 0).toString(),
-                                ) ??
-                                0.0;
-
-                            final subtotalProducto = precio * cantidad;
-
                             return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _resumenProductoRow(
-                                nombre: nombre.toString(),
-                                cantidad: cantidad,
-                                subtotal: subtotalProducto,
-                              ),
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: _resumenProductoRow(producto),
                             );
-                          }).toList(),
+                          }),
 
-                          // Costo de envío
-                          if (costoEnvio > 0) ...[
-                            const SizedBox(height: 8),
-                            _resumenRow('Costo de envío', costoEnvio),
+                          Divider(color: Colors.grey.shade200, height: 24),
+
+                          _resumenRow('Subtotal', subtotal),
+
+                          // 🟢 NUEVO: fila de descuento por cupón, solo si
+                          // hay uno aplicado
+                          if (codigoCupon != null && descuentoCupon > 0) ...[
+                            const SizedBox(height: 10),
+                            _resumenDescuentoRow(codigoCupon, descuentoCupon),
                           ],
+
+                          const SizedBox(height: 10),
+                          _resumenEnvioRow(costoEnvio),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      _infoCard(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text(
+                                'Total a pagar',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'S/ ${totalFinal.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    'IGV incluido',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ],
@@ -311,7 +366,6 @@ class _ResumenCompraState extends State<ResumenCompra> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Botón continuar
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -354,10 +408,13 @@ class _ResumenCompraState extends State<ResumenCompra> {
     );
   }
 
-  Widget _infoCard({required List<Widget> children}) {
+  Widget _infoCard({
+    required List<Widget> children,
+    EdgeInsets padding = const EdgeInsets.all(18),
+  }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: padding,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -395,58 +452,200 @@ class _ResumenCompraState extends State<ResumenCompra> {
     );
   }
 
-  Widget _resumenProductoRow({
-    required String nombre,
-    required int cantidad,
-    required double subtotal,
-  }) {
+  Widget _resumenProductoRow(Map<String, dynamic> producto) {
+    final String nombre = producto['titulo']?.toString() ?? 'Producto';
+    final String imagenUrl = producto['imagen_principal']?.toString() ?? '';
+    final String color = producto['color']?.toString() ?? '';
+    final String talla = producto['talla']?.toString() ?? '';
+
+    final int cantidad =
+        int.tryParse((producto['cantidad'] ?? 1).toString()) ?? 1;
+
+    final double precio =
+        double.tryParse((producto['precio'] ?? 0).toString()) ?? 0.0;
+    final double? precioAntes = producto['precioAntes'] != null
+        ? double.tryParse(producto['precioAntes'].toString())
+        : null;
+    final bool tieneOferta =
+        precioAntes != null && precioAntes > 0 && precioAntes != precio;
+
+    final double subtotalProducto = precio * cantidad;
+
+    final String subtitulo = [
+      if (color.isNotEmpty) color,
+      if (talla.isNotEmpty) talla,
+    ].join(' · ');
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: imagenUrl.isNotEmpty
+                  ? Image.network(
+                      imagenUrl,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 56,
+                        height: 56,
+                        color: Colors.grey.shade100,
+                        child: Icon(
+                          Icons.image_outlined,
+                          color: Colors.grey.shade400,
+                          size: 22,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      width: 56,
+                      height: 56,
+                      color: Colors.grey.shade100,
+                      child: Icon(
+                        Icons.image_outlined,
+                        color: Colors.grey.shade400,
+                        size: 22,
+                      ),
+                    ),
+            ),
+            Positioned(
+              top: -6,
+              left: -6,
+              child: Container(
+                width: 18,
+                height: 18,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  cantidad.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                nombre,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (subtitulo.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitulo,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+              if (tieneOferta) ...[
+                const SizedBox(height: 2),
+                const Text(
+                  'En oferta',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'S/ ${subtotalProducto.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'S/ ${precio.toStringAsFixed(2)} c/u',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _resumenRow(String label, double valor) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: Text(
-            nombre,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
         ),
-        Container(
-          width: 50,
-          alignment: Alignment.center,
-          child: Text(
-            'x$cantidad',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
+        Text(
+          'S/ ${valor.toStringAsFixed(2)}',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        SizedBox(
-          width: 80,
-          child: Text(
-            'S/ ${subtotal.toStringAsFixed(2)}',
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ],
+    );
+  }
+
+  // 🟢 NUEVO: fila de descuento del cupón, en verde con signo negativo
+  Widget _resumenDescuentoRow(String codigo, double descuento) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Descuento ($codigo)',
+          style: TextStyle(fontSize: 14, color: Colors.green.shade700),
+        ),
+        Text(
+          '- S/ ${descuento.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.green.shade700,
           ),
         ),
       ],
     );
   }
 
-  Widget _resumenRow(String label, double valor, {bool destacado = false}) {
+  Widget _resumenEnvioRow(double costoEnvio) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          label,
-          style: TextStyle(
-            fontSize: destacado ? 16 : 14,
-            fontWeight: destacado ? FontWeight.bold : FontWeight.w500,
-            color: Colors.black87,
-          ),
+          'Envío',
+          style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
         ),
         Text(
-          'S/ ${valor.toStringAsFixed(2)}',
+          costoEnvio > 0 ? '+ S/ ${costoEnvio.toStringAsFixed(2)}' : '—',
           style: TextStyle(
-            fontSize: destacado ? 18 : 14,
-            fontWeight: destacado ? FontWeight.bold : FontWeight.w600,
-            color: Colors.black,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: costoEnvio > 0
+                ? const Color(0xFFED8B00)
+                : Colors.grey.shade400,
           ),
         ),
       ],

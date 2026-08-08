@@ -12,6 +12,7 @@ import 'package:lucky/providers/carrito_provider.dart';
 
 import 'package:lucky/services/pref_service.dart';
 import 'package:lucky/utils/app_routes.dart';
+import 'package:lucky/providers/cupon_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +55,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BannerProvider()),
         ChangeNotifierProvider(create: (_) => CategoriaProvider()),
         ChangeNotifierProvider(create: (_) => CheckoutProvider()),
+        ChangeNotifierProvider(create: (_) => CuponProvider()),//nuevo
       ],
       child: MaterialApp.router(
         routerConfig: appRouter, // Asignamos el router externo aquí
