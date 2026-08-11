@@ -100,7 +100,7 @@ class Perfil extends StatelessWidget {
                       icon: Symbols.shopping_cart,
                       title: 'Mis compras',
                       onTap: () {
-                        context.push('/mis-pedidos'); // <-- ACTUALIZADO
+                        context.push('/mis-pedidos');
                       },
                     ),
                     _buildMenuItem(
@@ -203,8 +203,14 @@ class Perfil extends StatelessWidget {
                 '¿Estás seguro de que quieres cerrar sesión?',
               ),
               actions: [
+                // 🟢 FIX: antes este TextButton no tenía `style`, así que
+                // tomaba el color primario del tema de la app (morado por
+                // defecto de Material) en vez de negro.
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.black,
+                  ),
                   child: const Text('Cancelar'),
                 ),
                 TextButton(
