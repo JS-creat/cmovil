@@ -58,31 +58,31 @@ class _ResumenCompraState extends State<ResumenCompra> {
         telefono: data['telefono'],
         idTipoEntrega: data['idTipoEntrega'],
         idDistrito: data['idTipoEntrega'] == 2 ? data['idDistrito'] : null,
-        // 🟢 NUEVO: el backend recalcula el descuento por su cuenta a
-        // partir del código, no confiamos en el monto ya mostrado en UI.
         codigoCupon: _obtenerCodigoCupon(),
       );
 
       if (!mounted) return;
 
-      await Provider.of<CarritoProvider>(
-        context,
-        listen: false,
-      ).cargarCarrito(context);
+      // 🟢 CAMBIADO: el pedido queda "Pendiente" en el backend — todavía
+      // no hay pago real. En vez de navegar directo a "Compra exitosa"
+      // (como si ya hubiera pagado), abrimos el WebView de Mercado Pago
+      // con la URL que armó el backend (init_point). Recién cuando el
+      // WebView detecta la URL de retorno de éxito, se navega a la
+      // pantalla final.
+      final initPoint = response['init_point'] as String?;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pedido realizado con éxito'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (initPoint == null || initPoint.isEmpty) {
+        throw Exception('No se pudo iniciar el pago. Intenta nuevamente.');
+      }
 
-      context.go(
-        '/compraExitosa',
+      if (!mounted) return;
+
+      context.push(
+        '/pagoWebview',
         extra: {
+          'initPoint': initPoint,
+          'idPedido': response['id_pedido'],
           'numeroPedido': response['numero_pedido'],
-          'totalPedido': response['total_pedido'],
-          'estadoPedido': response['estado_pedido'],
         },
       );
     } catch (e) {

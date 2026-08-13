@@ -13,15 +13,19 @@ class CheckoutService {
     }
   }
 
+  // 🟢 CAMBIADO: antes este método asumía que el pedido quedaba
+  // "confirmado" apenas respondía el backend (sin pago real de por
+  // medio). Ahora el backend crea el pedido como "Pendiente" y devuelve
+  // 'init_point' — la URL de Mercado Pago que hay que abrir en un
+  // WebView para que el usuario pague de verdad. El pedido recién pasa
+  // a "Confirmado" cuando Mercado Pago aprueba el pago (ver PagoService
+  // en el backend), no acá.
   Future<Map<String, dynamic>> confirmarCheckout({
     required int idTipoDocumento,
     required String numeroDocumento,
     required String telefono,
     required int idTipoEntrega,
     int? idDistrito,
-    // 🟢 NUEVO: código de cupón opcional. El backend recalcula el
-    // descuento por su cuenta (no confía en montos calculados en el
-    // cliente), así que solo mandamos el código, nada más.
     String? codigoCupon,
   }) async {
     try {
@@ -41,6 +45,9 @@ class CheckoutService {
       );
 
       if (response.data['success'] == true) {
+        // 'data' ahora incluye: id_pedido, numero_pedido, subtotal,
+        // costo_envio, monto_descuento, codigo_cupon, total_pedido,
+        // e init_point (la URL de pago de Mercado Pago).
         return response.data['data'];
       }
 

@@ -23,6 +23,7 @@ import '../screens/pedidos.dart';
 import '../screens/chat.dart';
 import '../screens/informacion_cuenta.dart';
 import '../screens/detalles_pedido_screen.dart';
+import '../screens/pago_webview.dart';
 import '../providers/auth_provider.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -140,6 +141,22 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>;
         return ResumenCompra(data: extra);
+      },
+    ),
+    // 🟢 NUEVO: pantalla de pago con Mercado Pago dentro de un WebView.
+    // Recibe la URL de pago (init_point) generada por el backend en
+    // CheckoutApiController::confirmar(), junto con los datos del pedido
+    // recién creado (todavía "Pendiente" hasta que el pago se apruebe).
+    GoRoute(
+      path: '/pagoWebview',
+      name: 'pagoWebview',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return PagoWebview(
+          initPoint: extra['initPoint'],
+          idPedido: extra['idPedido'],
+          numeroPedido: extra['numeroPedido'],
+        );
       },
     ),
     GoRoute(
