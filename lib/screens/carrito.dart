@@ -198,7 +198,7 @@ class _CarritoState extends State<Carrito> {
   }
 }
 
-// Widget separado para manejar el estado de cupones por producto
+// Widget separado para manejar cada ítem del carrito
 class _ItemCarritoConCupones extends StatefulWidget {
   final Map<String, dynamic> producto;
   final int index;
@@ -210,35 +210,6 @@ class _ItemCarritoConCupones extends StatefulWidget {
 }
 
 class _ItemCarritoConCuponesState extends State<_ItemCarritoConCupones> {
-  bool _cuponesExpandidos = false;
-
-  final List<Map<String, dynamic>> _cuponesDisponibles = [
-    {
-      'codigo': 'DESC20',
-      'descuento': 20,
-      'descripcion': '20% de descuento en toda la compra',
-      'validoHasta': '31/12/2024',
-    },
-    {
-      'codigo': 'ENVIOGRATIS',
-      'descuento': 0,
-      'descripcion': 'Envío gratis en compras mayores a S/ 100',
-      'validoHasta': '15/12/2024',
-    },
-    {
-      'codigo': 'VERANO15',
-      'descuento': 15,
-      'descripcion': '15% de descuento en productos de verano',
-      'validoHasta': '30/11/2024',
-    },
-    {
-      'codigo': 'BIENVENIDA10',
-      'descuento': 10,
-      'descripcion': '10% de descuento para nuevos usuarios',
-      'validoHasta': '31/12/2024',
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
     final carritoProvider = Provider.of<CarritoProvider>(context);
@@ -257,14 +228,10 @@ class _ItemCarritoConCuponesState extends State<_ItemCarritoConCupones> {
         ? (producto['precioAntes'] as num).toDouble()
         : null;
     final int? descuento = producto['descuento'] as int?;
-    // 🟢 FIX: antes se pintaba en rojo y se mostraba tachado siempre que
-    // precioAntes no fuera null, sin importar si realmente había una
-    // oferta. Si precioAntes == precio (o es 0/null), no hay descuento
-    // real, así que no debería verse rojo ni tachado.
+    // Solo se pinta rojo/tachado si realmente hay una oferta
     final bool tieneOferta =
         precioAntes != null && precioAntes > 0 && precioAntes != precio;
-    // 🟢 FIX: stock disponible para esta variante específica, usado para
-    // deshabilitar el botón "+" cuando ya se alcanzó el límite.
+    // Stock disponible para esta variante específica
     final int stockDisponible = producto['stock'] is int
         ? producto['stock'] as int
         : (producto['stock'] as num?)?.toInt() ?? 0;
@@ -283,421 +250,228 @@ class _ItemCarritoConCuponesState extends State<_ItemCarritoConCupones> {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Imagen del producto
-              Container(
-                width: 100,
-                height: 130,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.grey.shade100,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: imagenPrincipal.isNotEmpty
-                      ? Image.network(
-                          imagenPrincipal,
-                          fit: BoxFit.cover,
-                          width: 100,
-                          height: 130,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey.shade200,
-                              child: Icon(
-                                Symbols.image,
-                                size: 40,
-                                color: Colors.grey.shade400,
-                              ),
-                            );
-                          },
-                        )
-                      : Center(
+          // Imagen del producto
+          Container(
+            width: 100,
+            height: 130,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey.shade100,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: imagenPrincipal.isNotEmpty
+                  ? Image.network(
+                      imagenPrincipal,
+                      fit: BoxFit.cover,
+                      width: 100,
+                      height: 130,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey.shade200,
                           child: Icon(
                             Symbols.image,
                             size: 40,
                             color: Colors.grey.shade400,
                           ),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Información del producto
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Título y botón eliminar (ahora con X)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Text(
-                              titulo,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            carritoProvider.eliminarProducto(context, index);
-                          },
-                          icon: Icon(
-                            Symbols.close,
-                            size: 20,
-                            color: Colors.black,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Color y talla
-                    Row(
-                      children: [
-                        Text(
-                          'Color: $color',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Talla: $talla',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Precio y descuento
-                    Row(
-                      children: [
-                        Text(
-                          'S/ ${precio.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: tieneOferta
-                                ? const Color(0xFFFF0000)
-                                : Colors.black,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (tieneOferta && descuento != null && descuento > 0)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF0000),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '-$descuento%',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-
-                    // Precio anterior
-                    if (tieneOferta)
-                      Text(
-                        'S/ ${precioAntes.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                          decoration: TextDecoration.lineThrough,
-                        ),
+                        );
+                      },
+                    )
+                  : Center(
+                      child: Icon(
+                        Symbols.image,
+                        size: 40,
+                        color: Colors.grey.shade400,
                       ),
-                    const SizedBox(height: 8),
-
-                    // Selector de cantidad y botón de cupones
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Selector de cantidad
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                onPressed: cantidad > 1
-                                    ? () => carritoProvider.decrementarCantidad(
-                                        context,
-                                        index,
-                                      )
-                                    : null,
-                                icon: Icon(
-                                  Symbols.remove,
-                                  size: 16,
-                                  color: cantidad > 1
-                                      ? Colors.black
-                                      : Colors.grey,
-                                ),
-                                padding: const EdgeInsets.all(4),
-                                constraints: const BoxConstraints(),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                cantidad.toString(),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              // 🟢 FIX: el botón "+" ahora se deshabilita
-                              // visualmente al llegar al stock disponible.
-                              IconButton(
-                                onPressed: cantidad < stockDisponible
-                                    ? () => carritoProvider
-                                          .incrementarCantidad(context, index)
-                                    : () {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'No hay más stock disponible',
-                                            ),
-                                            duration: Duration(seconds: 2),
-                                          ),
-                                        );
-                                      },
-                                icon: Icon(
-                                  Symbols.add,
-                                  size: 16,
-                                  color: cantidad < stockDisponible
-                                      ? Colors.black
-                                      : Colors.grey,
-                                ),
-                                padding: const EdgeInsets.all(4),
-                                constraints: const BoxConstraints(),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Botón para mostrar cupones
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          child: TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _cuponesExpandidos = !_cuponesExpandidos;
-                              });
-                            },
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.only(
-                                left: 12,
-                                right: 6,
-                                top: 12,
-                                bottom: 12,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'Cupones',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(
-                                  _cuponesExpandidos
-                                      ? Symbols.keyboard_arrow_up
-                                      : Symbols.keyboard_arrow_down,
-                                  size: 16,
-                                  color: Colors.black,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Lista desplegable de cupones
-          if (_cuponesExpandidos) ...[
-            const SizedBox(height: 12),
-            Divider(color: Colors.grey.shade300, height: 1),
-            const SizedBox(height: 12),
-
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Icon(Symbols.local_offer, size: 16, color: Color(0xFFFF0000)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Cupones disponibles',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Column(
-              children: _cuponesDisponibles.map((cupon) {
-                return _ItemCupon(
-                  cupon: cupon,
-                  onSeleccionar: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Cupón ${cupon['codigo']} aplicado'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                    setState(() {
-                      _cuponesExpandidos = false;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// Widget para mostrar cada cupón individual
-class _ItemCupon extends StatelessWidget {
-  final Map<String, dynamic> cupon;
-  final VoidCallback onSeleccionar;
-
-  const _ItemCupon({required this.cupon, required this.onSeleccionar});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: cupon['descuento'] > 0
-                  ? Color(0xFFFF0000).withAlpha(25)
-                  : Colors.green.withAlpha(25),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: cupon['descuento'] > 0
-                    ? Color(0xFFFF0000).withAlpha(76)
-                    : Colors.green.withAlpha(76),
-                width: 1,
-              ),
-            ),
-            child: Text(
-              cupon['descuento'] > 0 ? '-${cupon['descuento']}%' : 'ENVÍO',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: cupon['descuento'] > 0
-                    ? Color(0xFFFF0000)
-                    : Colors.green,
-              ),
             ),
           ),
           const SizedBox(width: 12),
 
+          // Información del producto
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  cupon['codigo'],
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                // Título y botón eliminar
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          titulo,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        carritoProvider.eliminarProducto(context, index);
+                      },
+                      icon: Icon(
+                        Symbols.close,
+                        size: 20,
+                        color: Colors.black,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+
+                // Color y talla
+                Row(
+                  children: [
+                    Text(
+                      'Color: $color',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Talla: $talla',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+
+                // Precio y descuento
+                Row(
+                  children: [
+                    Text(
+                      'S/ ${precio.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: tieneOferta
+                            ? const Color(0xFFFF0000)
+                            : Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (tieneOferta && descuento != null && descuento > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF0000),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '-$descuento%',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+
+                // Precio anterior
+                if (tieneOferta)
+                  Text(
+                    'S/ ${precioAntes.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      decoration: TextDecoration.lineThrough,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  cupon['descripcion'],
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Válido hasta: ${cupon['validoHasta']}',
-                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                const SizedBox(height: 8),
+
+                // Selector de cantidad (sin botón de cupones)
+                Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: cantidad > 1
+                                ? () => carritoProvider.decrementarCantidad(
+                                    context,
+                                    index,
+                                  )
+                                : null,
+                            icon: Icon(
+                              Symbols.remove,
+                              size: 16,
+                              color: cantidad > 1
+                                  ? Colors.black
+                                  : Colors.grey,
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            cantidad.toString(),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            onPressed: cantidad < stockDisponible
+                                ? () => carritoProvider.incrementarCantidad(
+                                      context,
+                                      index,
+                                    )
+                                : () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'No hay más stock disponible',
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                            icon: Icon(
+                              Symbols.add,
+                              size: 16,
+                              color: cantidad < stockDisponible
+                                  ? Colors.black
+                                  : Colors.grey,
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ),
-
-          TextButton(
-            onPressed: onSeleccionar,
-            style: TextButton.styleFrom(
-              backgroundColor: Color(0xFFFF0000),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            ),
-            child: const Text(
-              'Aplicar',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ],

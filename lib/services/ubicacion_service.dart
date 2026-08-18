@@ -69,6 +69,20 @@ class UbicacionService {
     }
   }
 
+  // 🟢 Helper: convierte cualquier valor numérico que venga del JSON
+  // (int o double) a double de forma segura. Un JSON como
+  // "costo_envio": 25 se decodifica en Dart como int, no double — y un
+  // `as double` directo sobre eso explota con
+  // "type 'int' is not a subtype of type 'double'" en modo release
+  // (Chrome en modo debug es más permisivo y no siempre lo detecta).
+  double _toDouble(dynamic valor) {
+    if (valor == null) return 0.0;
+    if (valor is double) return valor;
+    if (valor is int) return valor.toDouble();
+    if (valor is String) return double.tryParse(valor) ?? 0.0;
+    return 0.0;
+  }
+
   /// Calcular costo de envío para un distrito específico
   /// Retorna un mapa con: costo_envio, nombre_agencia, tiempo_estimado, subtotal, total_con_envio
   Future<Map<String, dynamic>> calcularCostoEnvio(int idDistrito) async {
@@ -81,7 +95,18 @@ class UbicacionService {
       );
 
       if (response.statusCode == 200 && response.data['success'] == true) {
-        return response.data['data'];
+        final Map<String, dynamic> data = response.data['data'];
+
+        // 🟢 FIX: normalizamos los campos numéricos acá, en el único
+        // lugar donde se parsea esta respuesta, para que la pantalla
+        // (informacion_compra.dart) siempre reciba un double real y
+        // pueda seguir usando `as double` sin que explote en el celular.
+        return {
+          ...data,
+          'costo_envio': _toDouble(data['costo_envio']),
+          'subtotal': _toDouble(data['subtotal']),
+          'total_con_envio': _toDouble(data['total_con_envio']),
+        };
       }
 
       throw Exception(
