@@ -13,6 +13,7 @@ import '../screens/favoritos.dart';
 import '../screens/perfil.dart';
 import '../screens/iniciar_sesion.dart';
 import '../screens/registro_usuario.dart';
+import '../screens/olvide_contrasena.dart';
 import '../screens/carrito.dart';
 import '../screens/busqueda.dart';
 import '../screens/detalles_producto.dart';
@@ -76,7 +77,8 @@ final GoRouter appRouter = GoRouter(
               path: '/cuenta',
               name: 'cuenta',
               redirect: (context, state) {
-                if (state.fullPath == '/cuenta/registroUsuario') {
+                if (state.fullPath == '/cuenta/registroUsuario' ||
+                    state.fullPath == '/cuenta/olvideContrasena') {
                   return null;
                 }
 
@@ -105,6 +107,16 @@ final GoRouter appRouter = GoRouter(
                   path: 'registroUsuario',
                   name: 'registro',
                   builder: (context, state) => const RegistroUsuario(),
+                ),
+                // 🟢 NUEVO: pantalla de "olvidé mi contraseña". Se agregó
+                // también a la excepción del redirect() de arriba, igual
+                // que 'registroUsuario', porque un usuario SIN sesión
+                // debe poder entrar acá (si no, el redirect lo mandaría
+                // de vuelta a iniciarSesion antes de poder usarla).
+                GoRoute(
+                  path: 'olvideContrasena',
+                  name: 'olvideContrasena',
+                  builder: (context, state) => const OlvideContrasena(),
                 ),
               ],
             ),
@@ -143,10 +155,6 @@ final GoRouter appRouter = GoRouter(
         return ResumenCompra(data: extra);
       },
     ),
-    // 🟢 NUEVO: pantalla de pago con Mercado Pago dentro de un WebView.
-    // Recibe la URL de pago (init_point) generada por el backend en
-    // CheckoutApiController::confirmar(), junto con los datos del pedido
-    // recién creado (todavía "Pendiente" hasta que el pago se apruebe).
     GoRoute(
       path: '/pagoWebview',
       name: 'pagoWebview',

@@ -125,10 +125,17 @@ class _IniciarSesionState extends State<IniciarSesion> {
 
                                     const SizedBox(height: 12),
 
+                                    // 🟢 FIX: antes onTap: () {} no hacía
+                                    // nada. Ahora navega a la pantalla
+                                    // nueva de recuperación de contraseña.
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: GestureDetector(
-                                        onTap: () {},
+                                        onTap: () {
+                                          context.push(
+                                            '/cuenta/olvideContrasena',
+                                          );
+                                        },
                                         child: const Text(
                                           '¿Olvidaste tu contraseña?',
                                           style: TextStyle(
