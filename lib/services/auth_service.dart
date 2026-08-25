@@ -1,11 +1,16 @@
 import 'package:dio/dio.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lucky/models/auth_model.dart';
-import 'package:lucky/utils/dio_client.dart';
 import 'package:lucky/services/pref_service.dart';
+import 'package:lucky/utils/dio_client.dart';
 
 class AuthService {
   final Dio _dio = ApiClient.dio;
   final PrefService _prefs = PrefService();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: '623271174588-73s87gn8a30ipv67ci96a9a9ri81ekge.apps.googleusercontent.com',
+    scopes: ['email', 'profile'],
+  );
 
   Future<void> _saveToken(String token) async {
     await _prefs.setString('token', token);
@@ -134,7 +139,51 @@ class AuthService {
     }
   }
 
+  Future<AuthResponse> loginWithGoogle() async {
+    try {
+      // 1. Iniciar flujo de Google Sign In
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        throw 'Inicio de sesión cancelado';
+      }
+
+      // 2. Obtener los tokens de autenticación
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        throw 'No se obtuvo el token de autenticación de Google';
+      }
+
+      // 3. Enviar token a Laravel Backend
+      final response = await _dio.post(
+        '/login/google',
+        data: {'id_token': idToken},
+      );
+
+      if (response.statusCode == 200) {
+        final authResponse = AuthResponse.fromJson(response.data);
+        if (authResponse.token != null) {
+          await _saveToken(authResponse.token!);
+        }
+        return authResponse;
+      } else {
+        throw 'Error en autenticación backend';
+      }
+    } on DioException catch (e) {
+      throw _handleError(e);
+    } catch (e) {
+      throw e.toString().replaceAll('Exception: ', '');
+    }
+  }
+
   Future<void> logout() async {
+    try {
+      if (await _googleSignIn.isSignedIn()) {
+        await _googleSignIn.signOut();
+      }
+    } catch (_) {}
     await removeToken();
   }
 

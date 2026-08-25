@@ -19,8 +19,8 @@ void main() async {
 
   final prefService = PrefService();
   await prefService.init();
-  /*
-  const instanceID = 'c5190994-49a1-4d86-ab48-70fca28a4704';
+  
+  const instanceID = '11dd7a01-62c2-4ab0-942e-37a4be40cbda';
 
   try {
     await PusherBeams.instance.start(instanceID);
@@ -34,9 +34,10 @@ void main() async {
         await PusherBeams.instance.addDeviceInterest('carrito-$userId');
       }
     }
-  } catch (e) {
-    // Errores controlados de Pusher
-  } */
+  } catch (e, s) {
+    debugPrint("ERROR: $e");
+    debugPrint("$s");
+  }
 
   runApp(const MyApp());
 }
@@ -59,7 +60,7 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp.router(
         routerConfig: appRouter, // Asignamos el router externo aquí
-        title: 'Lucky',
+        title: 'B-EDEN',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primaryColor: const Color(0xFFED1C24),

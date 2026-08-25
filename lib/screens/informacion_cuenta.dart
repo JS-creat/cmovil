@@ -72,8 +72,6 @@ class _InformacionCuentaState extends State<InformacionCuenta> {
             duration: Duration(seconds: 2),
           ),
         );
-        // Opcional: regresar a la pantalla anterior después de guardar
-        // context.pop();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -174,19 +172,7 @@ class _InformacionCuentaState extends State<InformacionCuenta> {
                                 child: Container(
                                   width: 36,
                                   height: 36,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFED1C24),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    size: 18,
-                                    color: Colors.white,
-                                  ),
+                                  
                                 ),
                               ),
                             ],

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lucky/services/auth_service.dart';
 import 'package:lucky/models/auth_model.dart';
+import 'package:lucky/providers/auth_provider.dart';
+import 'package:lucky/providers/carrito_provider.dart';
+import 'package:lucky/services/auth_service.dart';
+import 'package:provider/provider.dart';
 
 class RegistroUsuario extends StatefulWidget {
   const RegistroUsuario({super.key});
@@ -74,6 +77,31 @@ class _RegistroUsuarioState extends State<RegistroUsuario> {
       _mostrarError(e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final carritoProvider = Provider.of<CarritoProvider>(
+      context,
+      listen: false,
+    );
+
+    try {
+      final success = await authProvider.loginWithGoogle();
+
+      if (success) {
+        if (mounted) {
+          context.pushReplacement('/');
+        }
+        carritoProvider.cargarCarrito(context);
+      } else if (mounted && authProvider.error != null) {
+        _mostrarError(authProvider.error!);
+      }
+    } catch (e) {
+      if (mounted) {
+        _mostrarError(e.toString());
+      }
     }
   }
 
@@ -172,7 +200,15 @@ class _RegistroUsuarioState extends State<RegistroUsuario> {
                                     ? const Center(
                                         child: CircularProgressIndicator(),
                                       )
-                                    : _botonRegistrarse(),
+                                    : Column(
+                                        children: [
+                                          _botonRegistrarse(),
+                                          const SizedBox(height: 20),
+                                          _separadorO(),
+                                          const SizedBox(height: 20),
+                                          _botonGoogle(),
+                                        ],
+                                      ),
 
                                 const Spacer(),
 
@@ -253,7 +289,7 @@ class _RegistroUsuarioState extends State<RegistroUsuario> {
             keyboardType: keyboardType,
             decoration: InputDecoration(
               hintText: placeholder,
-              hintStyle: TextStyle(color: Colors.grey),
+              hintStyle: const TextStyle(color: Colors.grey),
               border: InputBorder.none,
             ),
           ),
@@ -284,7 +320,7 @@ class _RegistroUsuarioState extends State<RegistroUsuario> {
                 child: TextField(
                   controller: _passwordController,
                   obscureText: _ocultarContrasena,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: '********',
                     hintStyle: TextStyle(color: Colors.grey),
                     border: InputBorder.none,
@@ -332,7 +368,7 @@ class _RegistroUsuarioState extends State<RegistroUsuario> {
                 child: TextField(
                   controller: _confirmPasswordController,
                   obscureText: _ocultarConfirmarContrasena,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: '********',
                     hintStyle: TextStyle(color: Colors.grey),
                     border: InputBorder.none,
@@ -379,6 +415,48 @@ class _RegistroUsuarioState extends State<RegistroUsuario> {
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _separadorO() {
+    return Row(
+      children: [
+        Expanded(child: Container(height: 1, color: Colors.grey.shade300)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'o continúa con',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          ),
+        ),
+        Expanded(child: Container(height: 1, color: Colors.grey.shade300)),
+      ],
+    );
+  }
+
+  Widget _botonGoogle() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: _handleGoogleLogin,
+        icon: const Icon(Icons.g_mobiledata, size: 30, color: Colors.black),
+        label: const Text(
+          'Continuar con Google',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          side: BorderSide(color: Colors.grey.shade300),
         ),
       ),
     );

@@ -39,10 +39,34 @@ class _IniciarSesionState extends State<IniciarSesion> {
         if (mounted) {
           context.pushReplacement('/');
         }
-
         carritoProvider.cargarCarrito(context);
       } else if (mounted) {
         _mostrarError(authProvider.error ?? 'Error al iniciar sesión');
+      }
+    } catch (e) {
+      if (mounted) {
+        _mostrarError(e.toString());
+      }
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final carritoProvider = Provider.of<CarritoProvider>(
+      context,
+      listen: false,
+    );
+
+    try {
+      final success = await authProvider.loginWithGoogle();
+
+      if (success) {
+        if (mounted) {
+          context.pushReplacement('/');
+        }
+        carritoProvider.cargarCarrito(context);
+      } else if (mounted && authProvider.error != null) {
+        _mostrarError(authProvider.error!);
       }
     } catch (e) {
       if (mounted) {
@@ -125,9 +149,6 @@ class _IniciarSesionState extends State<IniciarSesion> {
 
                                     const SizedBox(height: 12),
 
-                                    // 🟢 FIX: antes onTap: () {} no hacía
-                                    // nada. Ahora navega a la pantalla
-                                    // nueva de recuperación de contraseña.
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: GestureDetector(
@@ -152,7 +173,15 @@ class _IniciarSesionState extends State<IniciarSesion> {
                                         ? const Center(
                                             child: CircularProgressIndicator(),
                                           )
-                                        : _botonIniciarSesion(),
+                                        : Column(
+                                            children: [
+                                              _botonIniciarSesion(),
+                                              const SizedBox(height: 20),
+                                              _separadorO(),
+                                              const SizedBox(height: 20),
+                                              _botonGoogle(),
+                                            ],
+                                          ),
 
                                     const Spacer(),
 
@@ -236,7 +265,7 @@ class _IniciarSesionState extends State<IniciarSesion> {
             controller: controller,
             decoration: InputDecoration(
               hintText: placeholder,
-              hintStyle: TextStyle(color: Colors.grey),
+              hintStyle: const TextStyle(color: Colors.grey),
               border: InputBorder.none,
             ),
           ),
@@ -267,7 +296,7 @@ class _IniciarSesionState extends State<IniciarSesion> {
                 child: TextField(
                   controller: _passwordController,
                   obscureText: _ocultarContrasena,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: '********',
                     hintStyle: TextStyle(color: Colors.grey),
                     border: InputBorder.none,
@@ -312,6 +341,48 @@ class _IniciarSesionState extends State<IniciarSesion> {
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _separadorO() {
+    return Row(
+      children: [
+        Expanded(child: Container(height: 1, color: Colors.grey.shade300)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'o continúa con',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          ),
+        ),
+        Expanded(child: Container(height: 1, color: Colors.grey.shade300)),
+      ],
+    );
+  }
+
+  Widget _botonGoogle() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: _handleGoogleLogin,
+        icon: const Icon(Icons.g_mobiledata, size: 30, color: Colors.black),
+        label: const Text(
+          'Continuar con Google',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          side: BorderSide(color: Colors.grey.shade300),
         ),
       ),
     );

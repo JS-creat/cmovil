@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "1020054521852",
-    "project_id": "c-lucky-cf7b8",
-    "storage_bucket": "c-lucky-cf7b8.firebasestorage.app"
+    "project_number": "1015499356677",
+    "project_id": "beden-4f9fe",
+    "storage_bucket": "beden-4f9fe.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1020054521852:android:99dbb7a76f63f1bdd1d479",
+        "mobilesdk_app_id": "1:1015499356677:android:71c808c2150a0831f37a6c",
         "android_client_info": {
           "package_name": "com.example.lucky"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1015499356677-9f584h7lsdded0dbic93lmk3fmgbn35l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyA9Y88psKRhT4AiobksEXD9xnvI9dOED24"
+          "current_key": "AIzaSyAiZhoh56KIN8qTU8ffcxRBsJyHX_rwEoY"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1015499356677-9f584h7lsdded0dbic93lmk3fmgbn35l.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

@@ -32,18 +32,12 @@ class AuthProvider extends ChangeNotifier {
     _isChecking = true;
     notifyListeners();
 
-    // 🟢 FIX: usamos el mismo mecanismo de storage que AuthService
     // (clave 'token', vía PrefService), en vez de un storage paralelo
     // con otra clave ('auth_token') que Dio nunca llegaba a conocer.
     final tokenGuardado = await _authService.getStoredToken();
 
     if (tokenGuardado != null && tokenGuardado.isNotEmpty) {
       try {
-        // 🟢 FIX: ahora sí le avisamos a Dio que use este token en el
-        // header Authorization antes de pedir el perfil. Antes esto
-        // nunca se llamaba acá, por lo que getPerfil() salía sin token,
-        // el backend respondía 401 y eso disparaba un logout() que
-        // borraba la sesión que se acababa de recuperar.
         ApiClient.setAuthToken(tokenGuardado);
         _token = tokenGuardado;
 
@@ -116,8 +110,6 @@ class AuthProvider extends ChangeNotifier {
         if (response.token != null) {
           _usuario = response.user;
           _token = response.token;
-          // El guardado en storage y el ApiClient.setAuthToken() ya los
-          // hace _authService.register() -> _saveToken() internamente.
         }
         _isLoading = false;
         notifyListeners();
@@ -228,5 +220,37 @@ class AuthProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  Future<bool> loginWithGoogle() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _authService.loginWithGoogle();
+
+      if (response.user != null && response.token != null) {
+        if (response.user!.id <= 0) {
+          throw Exception('ID de usuario inválido');
+        }
+
+        ApiClient.setAuthToken(response.token!);
+
+        _usuario = response.user;
+        _token = response.token;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 }

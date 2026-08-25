@@ -19,7 +19,6 @@ class Perfil extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // ================= CABECERA =================
             Container(
               color: Colors.white,
               child: Column(
@@ -35,7 +34,6 @@ class Perfil extends StatelessWidget {
               ),
             ),
 
-            // ================= CONTENIDO =================
             Expanded(
               child: Container(
                 color: const Color(0xFFF7F7F7),
@@ -110,7 +108,7 @@ class Perfil extends StatelessWidget {
                         context.push('/cupones');
                       },
                     ),
-                    _buildMenuItem(
+                    /*_buildMenuItem(
                       icon: Symbols.notifications,
                       title: 'Notificaciones',
                       onTap: () {
@@ -120,7 +118,7 @@ class Perfil extends StatelessWidget {
                           ),
                         );
                       },
-                    ),
+                    ),*/
                     // Botón cerrar sesión
                     _buildLogoutButton(context),
                   ],
@@ -203,9 +201,6 @@ class Perfil extends StatelessWidget {
                 '¿Estás seguro de que quieres cerrar sesión?',
               ),
               actions: [
-                // 🟢 FIX: antes este TextButton no tenía `style`, así que
-                // tomaba el color primario del tema de la app (morado por
-                // defecto de Material) en vez de negro.
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
                   style: TextButton.styleFrom(
